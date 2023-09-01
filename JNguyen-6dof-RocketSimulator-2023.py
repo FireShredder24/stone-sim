@@ -1,3 +1,7 @@
+# By John Nguyen <knightofthealtar64@gmail.com>
+# Python 3.10.11 with VPython 7.6.4
+# MIT License
+
 import math
 import random
 from vpython import *
@@ -111,6 +115,7 @@ class WindProfile:
 
 # Physics object class declaration
 class FreeRocket:
+    # TODO: Include switches for all graphs
     # constructor
     def __init__(self, name, pos, yaw, pitch, roll, v_0, ymi, pmi, rmi, cp, cd, A, cd_s, A_s, chute_cd, chute_A,
                  drogue_cd,
@@ -182,8 +187,10 @@ class FreeRocket:
         self.velocity_graph_z = gcurve(graph=self.velocity_graph, color=color.blue)
         self.velocity_graph_total = gcurve(graph=self.velocity_graph, color=color.black)
 
-        # TODO: Add summary statistics / after-flight report
-
+        self.v_max = 0  # m/s, maximum absolute velocity
+        self.y_max = 0  # m, maximum altitude
+        self.a_max = 0  # m/s^2, maximum acceleration
+        self.g_max = 0  # G, maximum acceleration
         # end of constructor
 
     # Drag coefficient estimator
@@ -247,11 +254,11 @@ class FreeRocket:
 
         if self.v.y < 5 and not self.drogue:
             self.drogue = True
-            print("Drogue deployment at T+", t)
+            print("Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y), " & Speed: ", "{:3.2f}".format(self.v.mag))
 
         if self.pos.y < 150 and self.drogue and not self.main_chute:
             self.main_chute = True
-            print("Main chute deployment at T+", t)
+            print("Main chute deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y), " & Speed: ", "{:3.2f}".format(self.v.mag))
 
         self.flight_side.plot(payload.pos.x, payload.pos.y)
         self.moment_graph_y.plot(t, M_net.x)
@@ -261,8 +268,18 @@ class FreeRocket:
         self.velocity_graph_y.plot(t, self.v.y)
         self.velocity_graph_z.plot(t, self.v.z)
         self.velocity_graph_total.plot(t, self.v.mag)
-
+        
+        if self.pos.y > self.y_max:
+            self.y_max = self.pos.y
+        if self.v.mag > self.v_max:
+            self.v_max = self.v.mag
+        a = f_net.mag / self.mass
+        if a > self.a_max:
+            self.a_max = a
+        if a / g_0 > self.g_max:
+            self.g_max = a / g_0
         # end of simulation method
+    # TODO: Implement after-flight report method
     # end of class def
 
 
@@ -304,10 +321,13 @@ print("payload p:", payload.p)
 print("payload position: ", payload.pos, " rotation: ", payload.rot, " moments of inertia (YPR): ", payload.I_0)
 
 time = 0
-dtime = 0.01
+dtime = 0.05
 
 print("----BEGIN SIMULATION----")
 while time < 120 and payload.pos.y > 0:
     payload.simulate(time, dtime)
 
     time += dtime
+print("----END SIMULATION----")
+
+# TODO call summary stat method of each FreeRocket
