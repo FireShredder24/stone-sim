@@ -288,8 +288,6 @@ class FreeRocket:
         if self.t0 <= t <= self.t1:
             f_thrust = self.thrust(t - self.t0) * yp_unit(self.rot.x, self.rot.y)
 
-        # TODO: Update mass based on consumed fuel
-
         # TOTAL NET FORCE
         f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue
 
