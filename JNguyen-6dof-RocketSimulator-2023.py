@@ -304,6 +304,14 @@ class FreeRocket:
         self.drot = self.L / self.mass  # calculating rotation rate
         self.rot = self.rot + self.drot * dt  # incrementing orientation
 
+        # End of movement during this iteration
+
+        # Remove burned fuel from vehicle mass
+        # Assumes fuel mass loss is proportional to thrust
+        self.mass = self.mass - f_thrust.mag * dt / self.J * self.fuel_mass
+
+        # Parachute deployment checks
+
         if self.v.y < 5 and not self.drogue:
             self.drogue = True
             print(self.name + " Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
