@@ -28,7 +28,6 @@ r_spec = 287.05  # J/(kg * K)
 
 # air density function, based on International Standard Atmosphere
 def rho(y):  # kg/m^3 air pressure
-    dens = 1.23
     if y <= 11000:
         dens = -(1.2985 - 0.3639) / 11610 * (y + 610) + 1.2985
     elif 11000 < y <= 20000:
@@ -44,7 +43,6 @@ def rho(y):  # kg/m^3 air pressure
 
 # air temperature function, from ISA
 def temp(y):  # K temperature
-    T = 273
     if y <= 11000:
         T = 273 + 19 - 6.5 * y / 1000  # -6.5 K per km
     elif 11000 < y <= 20000:
@@ -107,10 +105,27 @@ class WindProfile:
         print("angle set:", self.angleSet)
         # end constructor
 
-    # TODO: Interpolate between wind bands
+
     def wind(self, altitude):
-        index = int((altitude + 50) / self.step)
-        return yp_unit(self.angleSet[index], 0) * self.speedSet[index]
+        index = (altitude + 50) / self.step  # normalize to band number
+        band_pos = index - floor(index)  # relative position within altitude band
+        index = abs(int(index))  # convert to positive whole number for table index
+        angle = self.angleSet[index]  # grab angle from wind band
+        speed = self.speedSet[index]  # grab speed from wind band
+        if band_pos <= 0.2:  # if in the lower 20% of wind band, interpolate to the avg. b/w current and previous bands
+            angle_1 = self.angleSet[index - 1]  # angle from previous wind band
+            speed_1 = self.speedSet[index - 1]  # speed from previous wind band
+            # avg. of 2 wind bands (y-intercept) + difference b/w current band and avg. point (slope) * rel. pos (x)
+            angle = (angle_1 + angle) / 2 + (angle - (angle_1 + angle) / 2) * band_pos / 0.2
+            speed = (speed + speed_1) / 2 + (speed - (speed_1 + speed) / 2) * band_pos / 0.2
+        if band_pos >= 0.8:  # if in the upper 20% of wind band, interpolate to the avg. b/w current and next bands
+            angle_1 = self.angleSet[index + 1]  # angle from next wind band
+            speed_1 = self.speedSet[index + 1]  # speed from next wind band
+            # current wind band (y-intercept) + difference b/w current band and avg. point (slope) * rel. pos (x)
+            angle = angle - (angle - (angle_1 + angle) / 2) * (band_pos - 0.8) / 0.2
+            speed = speed - (speed - (speed_1 + speed) / 2) * (band_pos - 0.8) / 0.2
+
+        return yp_unit(angle, 0) * speed  # unit vector of angle, times speed
 
 
 # Physics object class declaration
@@ -254,11 +269,13 @@ class FreeRocket:
 
         if self.v.y < 5 and not self.drogue:
             self.drogue = True
-            print("Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y), " & Speed: ", "{:3.2f}".format(self.v.mag))
+            print("Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
+                  " & Speed: ", "{:3.2f}".format(self.v.mag))
 
         if self.pos.y < 150 and self.drogue and not self.main_chute:
             self.main_chute = True
-            print("Main chute deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y), " & Speed: ", "{:3.2f}".format(self.v.mag))
+            print("Main chute deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
+                  " & Speed: ", "{:3.2f}".format(self.v.mag))
 
         self.flight_side.plot(payload.pos.x, payload.pos.y)
         self.moment_graph_y.plot(t, M_net.x)
@@ -268,7 +285,7 @@ class FreeRocket:
         self.velocity_graph_y.plot(t, self.v.y)
         self.velocity_graph_z.plot(t, self.v.z)
         self.velocity_graph_total.plot(t, self.v.mag)
-        
+
         if self.pos.y > self.y_max:
             self.y_max = self.pos.y
         if self.v.mag > self.v_max:
@@ -288,7 +305,9 @@ def payload_thrust(t):
     return -77 * (t - 0.2) ** 2 + 300
 
 
-wind_1 = WindProfile("FAR", 5, 3, pi / 4, pi, 500)
+# Beginning of actual program execution
+
+wind_1 = WindProfile("FAR", 5, 3, pi / 4, pi, 100)
 
 # Alpha Phoenix on I-300
 payload = FreeRocket(
