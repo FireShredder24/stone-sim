@@ -105,7 +105,6 @@ class WindProfile:
         print("angle set:", self.angleSet)
         # end constructor
 
-
     def wind(self, altitude):
         index = (altitude + 50) / self.step  # normalize to band number
         band_pos = index - floor(index)  # relative position within altitude band
@@ -130,7 +129,18 @@ class WindProfile:
 
 # Physics object class declaration
 class FreeRocket:
-    # TODO: Include switches for all graphs
+    position_graph_enable = False
+    rotation_graph_enable = True
+    velocity_graph_enable = True
+    rotation_rate_graph_enable = True
+    acceleration_graph_enable = False
+    moment_graph_enable = False
+    side_profile_enable = True
+    top_profile_enable = True
+    aoa_graph_enable = True
+    wind_graph_enable = False
+
+
     # constructor
     def __init__(self, name, pos, yaw, pitch, roll, v_0, ymi, pmi, rmi, cp, cd, A, cd_s, A_s, chute_cd, chute_A,
                  drogue_cd,
@@ -138,7 +148,7 @@ class FreeRocket:
         self.name = name
         # FUNDAMENTAL VECTORS
         self.pos = pos  # m, 3D cartesian position
-        self.rot = vec(yaw, pitch, roll)  # rad, rotational position
+        self.rot = vec(yaw, pitch, roll)  # rad, orientation
         self.v_0 = v_0  # m/s, initial velocity magnitude
         self.I_0 = vec(ymi, pmi, rmi)  # kg*m^2, Mass moments of inertia
         # AERODYNAMIC PROPERTIES
@@ -182,25 +192,52 @@ class FreeRocket:
         self.drogue = False
         self.main_chute = False
 
-        # TODO: More graphs and graphing options
-
-        self.flight_side_graph = graph(title="Side Profile of " + self.name, xtitle="Downrange Distance",
+        if FreeRocket.side_profile_enable:
+            self.flight_side_graph = graph(title="Side Profile of " + self.name, xtitle="Downrange Distance",
                                        ytitle="Altitude (m)")
-        self.flight_side = gcurve(graph=self.flight_side_graph, color=color.green)
+            self.flight_side = gcurve(graph=self.flight_side_graph, color=color.green)
 
-        self.alpha_graph = graph(title="AoA of " + self.name, xtitle="t", ytitle="alpha, radians")
-        self.alpha_graph_curve = gcurve(graph=self.alpha_graph, color=color.red)
+        if FreeRocket.top_profile_enable:
+            self.flight_top_graph = graph(title="Top Profile of " + self.name, xtitle="Downrange Distance",
+                                          ytitle="Windage")
+            self.flight_top = gcurve(graph=self.flight_top_graph, color=color.blue)
 
-        self.moment_graph = graph(title="Moments on " + self.name, xtitle="t", ytitle="Nm")
-        self.moment_graph_y = gcurve(graph=self.moment_graph, color=color.red)
-        self.moment_graph_p = gcurve(graph=self.moment_graph, color=color.green)
-        self.moment_graph_r = gcurve(graph=self.moment_graph, color=color.blue)
+        if FreeRocket.acceleration_graph_enable:
+            self.acceleration_graph = graph(title="Acceleration of " + self.name, xtitle="t", ytitle="m/s^2")
+            self.acceleration_x = gcurve(graph=self.acceleration_graph, color=color.red)
+            self.acceleration_y = gcurve(graph=self.acceleration_graph, color=color.green)
+            self.acceleration_z = gcurve(graph=self.acceleration_graph, color=color.blue)
 
-        self.velocity_graph = graph(title="Velocity of " + self.name, xtitle="t", ytitle="m/s")
-        self.velocity_graph_x = gcurve(graph=self.velocity_graph, color=color.red)
-        self.velocity_graph_y = gcurve(graph=self.velocity_graph, color=color.green)
-        self.velocity_graph_z = gcurve(graph=self.velocity_graph, color=color.blue)
-        self.velocity_graph_total = gcurve(graph=self.velocity_graph, color=color.black)
+        if FreeRocket.position_graph_enable:
+            self.position_graph = graph(title="Position of " + self.name, xtitle="t", ytitle="m")
+            self.position_x = gcurve(graph=self.position_graph, color=color.red)
+            self.position_y = gcurve(graph=self.position_graph, color=color.green)
+            self.position_z = gcurve(graph=self.position_graph, color=color.blue)
+
+
+        if FreeRocket.rotation_graph_enable:
+            self.rotation_graph = graph(title="Orientation of " + self.name, xtitle="t", ytitle="radians")
+            self.rotation_yaw = gcurve(graph=self.rotation_graph, color=color.red)
+            self.rotation_pitch = gcurve(graph=self.rotation_graph, color=color.green)
+            self.rotation_roll = gcurve(graph=self.rotation_graph, color=color.blue)
+
+        if FreeRocket.aoa_graph_enable:
+            self.alpha_graph = graph(title="AoA of " + self.name, xtitle="t", ytitle="alpha, radians")
+            self.alpha_graph_curve = gcurve(graph=self.alpha_graph, color=color.red)
+
+        if FreeRocket.moment_graph_enable:
+            self.moment_graph = graph(title="Moments on " + self.name, xtitle="t", ytitle="Nm")
+            self.moment_graph_yaw = gcurve(graph=self.moment_graph, color=color.red)
+            self.moment_graph_pitch = gcurve(graph=self.moment_graph, color=color.green)
+            self.moment_graph_roll = gcurve(graph=self.moment_graph, color=color.blue)
+            self.moment_graph_total = gcurve(graph=self.moment_graph, color=color.black)
+
+        if FreeRocket.velocity_graph_enable:
+            self.velocity_graph = graph(title="Velocity of " + self.name, xtitle="t", ytitle="m/s")
+            self.velocity_graph_x = gcurve(graph=self.velocity_graph, color=color.red)
+            self.velocity_graph_y = gcurve(graph=self.velocity_graph, color=color.green)
+            self.velocity_graph_z = gcurve(graph=self.velocity_graph, color=color.blue)
+            self.velocity_graph_total = gcurve(graph=self.velocity_graph, color=color.black)
 
         self.v_max = 0  # m/s, maximum absolute velocity
         self.y_max = 0  # m, maximum altitude
@@ -269,22 +306,27 @@ class FreeRocket:
 
         if self.v.y < 5 and not self.drogue:
             self.drogue = True
-            print("Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
+            print(self.name + " Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
                   " & Speed: ", "{:3.2f}".format(self.v.mag))
 
         if self.pos.y < 150 and self.drogue and not self.main_chute:
             self.main_chute = True
-            print("Main chute deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
+            print(self.name + "Main chute deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
                   " & Speed: ", "{:3.2f}".format(self.v.mag))
 
-        self.flight_side.plot(payload.pos.x, payload.pos.y)
-        self.moment_graph_y.plot(t, M_net.x)
-        self.moment_graph_p.plot(t, M_net.y)
-        self.moment_graph_r.plot(t, M_net.z)
-        self.velocity_graph_x.plot(t, self.v.x)
-        self.velocity_graph_y.plot(t, self.v.y)
-        self.velocity_graph_z.plot(t, self.v.z)
-        self.velocity_graph_total.plot(t, self.v.mag)
+        # TODO: Implement all graphs from switch list
+        if FreeRocket.side_profile_enable:
+            self.flight_side.plot(payload.pos.x, payload.pos.y)
+        if FreeRocket.moment_graph_enable:
+            self.moment_graph_yaw.plot(t, M_net.x)
+            self.moment_graph_pitch.plot(t, M_net.y)
+            self.moment_graph_roll.plot(t, M_net.z)
+            self.moment_graph_total.plot(t, M_net.mag)
+        if FreeRocket.velocity_graph_enable:
+            self.velocity_graph_x.plot(t, self.v.x)
+            self.velocity_graph_y.plot(t, self.v.y)
+            self.velocity_graph_z.plot(t, self.v.z)
+            self.velocity_graph_total.plot(t, self.v.mag)
 
         if self.pos.y > self.y_max:
             self.y_max = self.pos.y
