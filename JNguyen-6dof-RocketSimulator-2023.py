@@ -179,7 +179,7 @@ class FreeRocket:
         dt = 0.01  # s, thrust time step
         self.J = 0  # total impulse
         while self.thrust(t) > 0:  # integration of thrust
-            self.J += self.thrust(t)
+            self.J += self.thrust(t) * dt
             t += dt
         self.bt = t  # s, motor burn time
         self.t0 = t0  # s, ignition time
@@ -435,6 +435,7 @@ payload = FreeRocket(
 )
 print("payload p:", payload.p)
 print("payload position: ", payload.pos, " rotation: ", payload.rot, " moments of inertia (YPR): ", payload.I_0)
+print("payload total impulse: ", payload.J, " Ns")
 
 time = 0
 dtime = 0.05
@@ -444,6 +445,6 @@ while time < 120 and payload.pos.y > 0:
     payload.simulate(time, dtime)
 
     time += dtime
-print("----END SIMULATION----")
+print("-----END SIMULATION-----")
 
 # TODO call summary stat method of each FreeRocket
