@@ -17,6 +17,9 @@ def yp_unit(yaw, pitch):
         sin(yaw) * cos(pitch)  # z
     )
 
+# Common number string formatting style
+def d2(num):
+    return "{:2.2f}".format(num)
 
 # ENVIRONMENT FUNCTIONS
 # bulk modulus of elasticity of air (used for speed of sound)
@@ -263,9 +266,22 @@ class FreeRocket:
 
 
         self.v_max = 0  # m/s, maximum absolute velocity
+        self.v_max_time = 0  # s, max velocity time
         self.y_max = 0  # m, maximum altitude
+        self.y_max_time = 0  # s, apogee time
         self.a_max = 0  # m/s^2, maximum acceleration
         self.g_max = 0  # G, maximum acceleration
+        self.a_max_time = 0 # s, max accel time
+        self.v_ground_hit = 0 # m/s, ground hit velocity
+        self.duration = 0 # s, flight duration
+        self.q_max = 0  # Pa, maximum dynamic pressure
+        self.q_max_time = 0  # s
+        self.q_max_speed = 0  # m/s
+        self.q_max_accel = 0  # m/s^2
+        self.mach_max = 0 # M, maximum Mach number
+        self.mach_max_time = 0 # s
+        self.mach_max_speed = 0 # m/s
+        self.mach_max_altitude = 0 # m
         # end of constructor
 
     # Drag coefficient estimator
@@ -328,22 +344,22 @@ class FreeRocket:
 
         # Remove burned fuel from vehicle mass
         # Assumes fuel mass loss is proportional to thrust
-        # TODO: Fix incorrect fuel mass loss
         self.mass = self.mass - f_thrust.mag * dt / self.J * self.fuel_mass
 
         # Parachute deployment checks
 
         if self.v.y < 5 and not self.drogue:
             self.drogue = True
-            print(self.name + " Drogue deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
-                  " & Speed: ", "{:3.2f}".format(self.v.mag))
+            print(self.name + " Drogue deployment at T+", d2(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
+                  " & Speed: ", d2(self.v.mag))
 
         if self.pos.y < 150 and self.drogue and not self.main_chute:
             self.main_chute = True
-            print(self.name + " Main chute deployment at T+", "{:3.2f}".format(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
-                  " & Speed: ", "{:3.2f}".format(self.v.mag))
+            print(self.name + " Main chute deployment at T+", d2(t), " at Altitude: ", "{:3.0f}".format(self.pos.y),
+                  " & Speed: ", d2(self.v.mag))
 
-        # TODO: Implement all graphs from switch list
+        mach_n = mag(self.v + self.wind.wind(self.pos.y)) / c(self.pos.y)
+        # Graph switched variables
         if FreeRocket.side_profile_enable:
             self.flight_side.plot(payload.pos.x, payload.pos.y)
         if FreeRocket.top_profile_enable:
@@ -383,17 +399,44 @@ class FreeRocket:
         if FreeRocket.mass_graph_enable:
             self.mass_plot.plot(t, self.mass)
 
+        # Update flight report variables
+        self.duration = t
         if self.pos.y > self.y_max:
             self.y_max = self.pos.y
+            self.y_max_time = t
         if self.v.mag > self.v_max:
             self.v_max = self.v.mag
+            self.v_max_time = t
         a = f_net.mag / self.mass
         if a > self.a_max:
             self.a_max = a
-        if a / g_0 > self.g_max:
-            self.g_max = a / g_0
+            self.g_max = a / abs(g_0)
+            self.a_max_time = t
+        if self.pos.y <= 0:
+            self.duration = t
+            self.v_ground_hit = self.v.mag
+        q = 1/2*rho(self.pos.y)*self.v.mag**2
+        if self.q_max < q:
+            self.q_max = q
+            self.q_max_time = t
+            self.q_max_speed = self.v.mag
+        if self.mach_max < mach_n:
+            self.mach_max = mach_n
+            self.mach_max_time = t
+            self.mach_max_speed = self.v.mag
+            self.mach_max_altitude = self.pos.y
         # end of simulation method
-    # TODO: Implement after-flight report method
+
+    def flight_report(self):
+        print(self.name, " Flight Report -------------")
+        print("Apogee: ", d2(self.y_max), "m at T+", d2(self.y_max_time))
+        print("Maximum speed: ", d2(self.v_max), "m/s at T+", d2(self.v_max_time))
+        print("Maximum acceleration: ", d2(self.a_max), "m/s^2 ", d2(self.g_max), " g at T+", d2(self.a_max_time))
+        print("Flight Duration: ", "{:3.1f}".format(self.duration))
+        print("Maximum dynamic pressure: ", d2(self.q_max / 1000), " kPa, at ", d2(self.q_max_speed), " m/s, at T+ ", d2(self.q_max_time))
+        print("Ground hit velocity: ", d2(self.v_ground_hit), "m/s, ", d2(self.pos.mag), "m downrange")
+        print("Maximum Mach number: ", d2(self.mach_max), " M at T+", d2(self.mach_max_time), "s at ", d2(self.mach_max_speed), "m/s at ", d2(self.mach_max_altitude), "m altitude")
+
     # end of class def
 
 
@@ -447,4 +490,5 @@ while time < 120 and payload.pos.y > 0:
     time += dtime
 print("-----END SIMULATION-----")
 
-# TODO call summary stat method of each FreeRocket
+payload.flight_report()
+
