@@ -133,7 +133,7 @@ class WindProfile:
 class FinSet:
 
 
-    def __init__(self, num_fins: int, mass: float, cg: vector, pos: vector, planform: float, stall_angle: float, ac_span: float):
+    def __init__(self, num_fins: int, mass: float, cg: vector, pos: vector, planform: float, stall_angle: float, ac_span: float, cl_pass):
         self.num_fins = num_fins # number of fins.  3 or 4 only supported at this time.
         self.fin_rad_pos = []
         for a in arange(0, 2*pi, 2*pi/num_fins):
@@ -145,6 +145,7 @@ class FinSet:
         self.planform = planform # planform wing area of each individual fin
         self.stall_angle = stall_angle # maximum angle of attack before wing stall
         self.ac_span = ac_span # radial offset from rocket centerline to center of lift of each fin
+        self.cl = cl_pass
 
     def ac_pos(self, rot: vector, fin_index: int):
         if fin_index > self.num_fins - 1:
@@ -152,12 +153,9 @@ class FinSet:
             exit(1)
         return yp_unit(self.fin_rad_pos[fin_index] + rot.x, 0) * self.ac_span
 
-    @staticmethod
-    def cl(aoa: float):
-        return 2*pi*aoa # using NASA approx for thin subsonic airfoils
 
     def lift(self, aoa: float, altitude: float, airspeed: float):
-        return FinSet.cl(aoa) * rho(altitude) * airspeed**2 / 2 * self.planform
+        return self.cl(aoa) * rho(altitude) * airspeed**2 / 2 * self.planform
 
     def lift_vec(self, rot: vector, fin_index: int, aoa: float, altitude: float, airspeed: float):
         return 0
@@ -476,11 +474,13 @@ class FreeRocket:
     # end of class def
 
 
-# payload/e-bay thrust function
-def payload_thrust(t):
+# thrust function approximation for I240 motor
+def I240(t):
     return -77 * (t - 0.2) ** 2 + 300
 
-
+# alpha phoenix fin coefficient of lift function
+def cl(aoa: float):
+    return 2*pi*aoa # using NASA approx for thin subsonic airfoils
 # Beginning of actual program execution
 
 fin_1 = FinSet(4,0.110,vec(0,0.152,0),vec(0,0.162,0),0.005,10*pi/180,0.05)
@@ -510,7 +510,7 @@ payload = FreeRocket(
     0.142,  # cg position aft of nose
     1.1,  # dry mass
     0.220,  # fuel mass
-    payload_thrust,  # thrust function
+    I240,  # thrust function
     0,  # ignition time
     wind_1,  # wind profile
     True # whether to print debug statements during construction
