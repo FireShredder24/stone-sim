@@ -209,8 +209,8 @@ class FreeRocket:
             self.flight_side = gcurve(graph=self.flight_side_graph, color=color.green, label="Side-on Track")
 
         if FreeRocket.top_profile_enable:
-            self.flight_top_graph = graph(title="Top Profile of " + self.name, xtitle="Downrange Distance",
-                                          ytitle="Windage", fast=FreeRocket.fast_graphing)
+            self.flight_top_graph = graph(title="Top Profile of " + self.name, xtitle="x",
+                                          ytitle="z", fast=FreeRocket.fast_graphing)
             self.flight_top = gcurve(graph=self.flight_top_graph, color=color.blue, label="Top-Down Track")
 
         if FreeRocket.acceleration_graph_enable:
@@ -363,7 +363,7 @@ class FreeRocket:
         mach_n = mag(self.v + self.wind.wind(self.pos.y)) / c(self.pos.y)
         # Graph switched variables
         if FreeRocket.side_profile_enable:
-            self.flight_side.plot(payload.pos.x, payload.pos.y)
+            self.flight_side.plot(sqrt(self.pos.x**2 + self.pos.z**2), self.pos.y)
         if FreeRocket.top_profile_enable:
             self.flight_top.plot(payload.pos.x, payload.pos.z)
         if FreeRocket.moment_graph_enable:
