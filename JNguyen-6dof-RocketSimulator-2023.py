@@ -133,19 +133,23 @@ class WindProfile:
 class FinSet:
 
 
-    def __init__(self, num_fins: int, mass: float, cg: vector, pos: vector, planform: float, stall_angle: float, ac_span: float, cl_pass):
+    def __init__(self, num_fins: int, center: vector, pos: vector, planform: float, stall_angle: float, ac_span: float, cl_pass):
         self.num_fins = num_fins # number of fins.  3 or 4 only supported at this time.
         self.fin_rad_pos = []
         for a in arange(0, 2*pi, 2*pi/num_fins):
             self.fin_rad_pos.append(a)
         print(f"Fin radial positions: {self.fin_rad_pos}")
-        self.mass = mass # kg, total of whole fin set
-        self.cg = cg # position of center of mass relative to parent rocket nose tip
+        self.center = center # position of center of mass relative to parent rocket nose tip
         self.pos = pos # position of center of lift relative to parent rocket nose tip
         self.planform = planform # planform wing area of each individual fin
         self.stall_angle = stall_angle # maximum angle of attack before wing stall
         self.ac_span = ac_span # radial offset from rocket centerline to center of lift of each fin
         self.cl = cl_pass
+        self.aoa_graph = graph(fast=False, title="Fin AoA", xtitle="t", ytitle="rad")
+        self.aoa_curves = []
+        for i in self.fin_rad_pos:
+            self.aoa_curves.append(gcurve(graph=self.aoa_graph, label=f"Fin {i} AoA", color=color.blue))
+        self.curve = gcurve(graph=self.aoa_graph, label="fin 0 aoa", color=color.red)
 
     def ac_pos(self, rot: vector, fin_index: int):
         if fin_index > self.num_fins - 1:
@@ -160,6 +164,17 @@ class FinSet:
     def lift_vec(self, rot: vector, fin_index: int, aoa: float, altitude: float, airspeed: float):
         return 0
 
+    def aoa(self, rot: vector, fin_index: int, airflow: vector, roll: vector):
+        ac = self.ac_pos(rot, fin_index) # aerodynamic center position vector
+        f_II_ac = airflow.dot(ac.hat) * ac.hat # airflow vector projected onto the aerodynamic center pos vector
+        f_II_roll = airflow.dot(roll.hat) * roll.hat # airflow vector projected onto the roll axis
+        f_I_accg = airflow - (f_II_roll + f_II_ac) # remaining component of airflow vector (orthogonal to both ac pos & roll axis)
+        alpha = atan(f_I_accg.mag/f_II_roll.mag) # right triangle with orthogonal component as opposite and roll component as adjacent
+        return alpha
+
+    def aoa_plot(self, t: float, rot:vector, airflow:vector, roll:vector):
+        for idx, i in enumerate(self.aoa_curves):
+            i.plot(t, self.aoa(rot, idx, airflow, roll))
 
 
 # Physics object class declaration
@@ -179,9 +194,16 @@ class FreeRocket:
 
     fast_graphing = False
 
+
+    # Rocket centric coordinate system definition:
+    # Origin point is tip of the nose cone, to physically ground all dimensions.
+    # Y axis is the roll axis, with fore being positive and aft being negative.
+    # X axis is the pitch axis, with starboard being positive and port being negative.
+    # Z axis is the yaw axis, with dorsal being positive and ventral being negative.
+
     # constructor
-    def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: float, cd: float, A: float, cd_s: float, A_s: float, chute_cd: float, chute_A: float,
-                 drogue_cd: float, drogue_A: float, cg: float, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool):
+    def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd: float, A: float, cd_s: float, A_s: float, chute_cd: float, chute_A: float,
+                 drogue_cd: float, drogue_A: float, cg: vector, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet):
         self.name = name
         # FUNDAMENTAL VECTORS
         self.pos = pos  # m, 3D cartesian position
@@ -189,8 +211,7 @@ class FreeRocket:
         self.v_0 = v_0  # m/s, initial velocity magnitude
         self.I_0 = vec(ymi, pmi, rmi)  # kg*m^2, Mass moments of inertia
         # AERODYNAMIC PROPERTIES
-        # TODO: Make cp and cg 3D
-        self.cp = cp  # m, center of pressure position aft of nose cone
+        self.cp = cp  # m, center of pressure position vector (see coordinate system definition above)
         self.cd = cd  # frontal drag coefficient
         self.A = A  # m^2, frontal reference area
         self.cd_s = cd_s  # side drag coefficient (airflow parallel to yaw/pitch axis)
@@ -200,8 +221,9 @@ class FreeRocket:
         self.drogue_cd = drogue_cd  # drogue chute cd
         self.drogue_A = drogue_A  # m^2, drogue chute ref. area
         self.wind = wind  # Wind profile
+        self.fin = fin # Fin set
         # MASS PROPERTIES
-        self.cg = cg  # m, center of mass position aft of nose cone
+        self.cg = cg  # m, center of mass position vector (see coordinate system definition above)
         self.dry_mass = dry_mass  # kg, total dry mass
         self.fuel_mass = fuel_mass  # lb to kg
         self.mass = self.dry_mass + self.fuel_mass  # kg, total initial mass
@@ -340,7 +362,7 @@ class FreeRocket:
         A = self.A_alpha(alpha)  # m^2, reference area
         f_drag = airflow.mag ** 2 * rho(self.pos.y) * cd * A / 2 * -airflow.hat # N, body drag force
 
-        M_drag = f_drag.cross(-vec(0, self.cg, 0) + vec(0, self.cp, 0))  # Moment generated by drag force
+        M_drag = f_drag.cross(-self.cg + self.cp)  # Moment generated by drag force
 
         # DROGUE PARACHUTE DRAG
         if self.drogue:
@@ -373,7 +395,7 @@ class FreeRocket:
         self.pos = self.pos + self.v * dt  # incrementing position
 
         self.L += M_net * dt  # incrementing angular momentum
-        self.drot = self.L / self.mass  # calculating rotation rate
+        self.drot = vec(self.L.x / self.I_0.x, self.L.y / self.I_0.y, self.L.z / self.I_0.z)  # calculating rotation rate
         self.rot = self.rot + self.drot * dt  # incrementing orientation
 
         # End of movement during this iteration
@@ -397,7 +419,7 @@ class FreeRocket:
         if FreeRocket.side_profile_enable:
             self.flight_side.plot(sqrt(self.pos.x**2 + self.pos.z**2), self.pos.y)
         if FreeRocket.top_profile_enable:
-            self.flight_top.plot(payload.pos.x, payload.pos.z)
+            self.flight_top.plot(self.pos.x, self.pos.z)
         if FreeRocket.moment_graph_enable:
             self.moment_yaw.plot(t, M_net.x)
             self.moment_pitch.plot(t, M_net.y)
@@ -459,6 +481,10 @@ class FreeRocket:
             self.mach_max_time = t
             self.mach_max_speed = self.v.mag
             self.mach_max_altitude = self.pos.y
+
+        #normalized_airflow = vec(airflow.dot(vec(1,0,0)))
+        self.fin.aoa_plot(t, self.rot, airflow, self.cg)
+
         # end of simulation method
 
     def flight_report(self):
@@ -483,7 +509,7 @@ def cl(aoa: float):
     return 2*pi*aoa # using NASA approx for thin subsonic airfoils
 # Beginning of actual program execution
 
-fin_1 = FinSet(4,0.110,vec(0,0.152,0),vec(0,0.162,0),0.005,10*pi/180,0.05,cl)
+fin_1 = FinSet(4,vec(0,-0.152,0),vec(0,-0.162,0),0.005,10*pi/180,0.05,cl)
 
 wind_1 = WindProfile("FAR", 3, 2, pi / 4, pi / 8, 100)
 
@@ -498,7 +524,7 @@ payload = FreeRocket(
     0.0715,  # yaw moment of inertia
     0.0715,  # pitch moment of inertia
     0.0012,  # roll moment of inertia
-    0.152,  # center of pressure position aft of nose
+    vec(0,-0.152,0),  # center of pressure position vector
     0.6,  # frontal drag coefficient
     0.015,  # frontal reference area
     1.5,  # side drag coefficient (orthogonal to long. axis)
@@ -507,13 +533,14 @@ payload = FreeRocket(
     0.4,  # main parachute ref. area
     0.8,  # drogue chute drag coefficient
     0.1,  # drogue chute ref. area
-    0.142,  # cg position aft of nose
+    vec(0,-0.142,0),  # cg position vector
     1.1,  # dry mass
     0.220,  # fuel mass
     I240,  # thrust function
     0,  # ignition time
     wind_1,  # wind profile
-    True # whether to print debug statements during construction
+    True, # whether to print debug statements during construction
+    fin_1
 )
 
 graphics_3D = False
