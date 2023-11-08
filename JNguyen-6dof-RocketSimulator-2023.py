@@ -80,7 +80,7 @@ def g(y):
 
 # wind profile class declaration
 class WindProfile:
-    def __init__(self, name, mu, sigma, angle_mu, angle_sigma, step):
+    def __init__(self, name: str, mu: float, sigma: float, angle_mu: float, angle_sigma: float, step: float, print_debug: bool):
         self.name = name
 
         # GENERATION PARAMETERS
@@ -105,8 +105,9 @@ class WindProfile:
             self.speedSet.append(speed)
             self.angleSet.append(angle)
 
-        print(f"speed set: {self.speedSet}")
-        print(f"angle set: {self.angleSet}")
+        if print_debug:
+            print(f"speed set: {self.speedSet}")
+            print(f"angle set: {self.angleSet}")
         # end constructor
 
     def wind(self, altitude):
@@ -206,14 +207,15 @@ class FreeRocket:
     position_graph_enable = False  # Implemented
     rotation_graph_enable = False  # Implemented
     velocity_graph_enable = True  # Implemented
-    rotation_rate_graph_enable = True  # Implemented
+    rotation_rate_graph_enable = False  # Implemented
     acceleration_graph_enable = True  # Implemented
     moment_graph_enable = False  # Implemented
     side_profile_enable = True  # Implemented
-    top_profile_enable = True  # Implemented
+    top_profile_enable = False  # Implemented
     aoa_graph_enable = True  # Implemented
-    drag_graph_enable = False  # Implemented
-    mass_graph_enable = False  # Implemented
+    drag_graph_enable = True  # Implemented
+    mass_graph_enable = True  # Implemented
+    thrust_graph_enable = True 
 
     fast_graphing = False
 
@@ -330,7 +332,7 @@ class FreeRocket:
             self.rotation_rate_total = gcurve(graph=self.rotation_rate_graph, color=color.black, label="Total rate")
 
         if FreeRocket.aoa_graph_enable:
-            self.aoa_graph = graph(title=f"AoA of {self.name}", xtitle="t", ytitle="alpha, radians", fast=FreeRocket.fast_graphing)
+            self.aoa_graph = graph(title=f"AoA of {self.name}", xtitle="t", ytitle="alpha, degrees", fast=FreeRocket.fast_graphing)
             self.aoa = gcurve(graph=self.aoa_graph, color=color.red, label="alpha")  # rad, Angle of attack
 
         if FreeRocket.moment_graph_enable:
@@ -355,6 +357,10 @@ class FreeRocket:
             self.mass_graph = graph(title=f"Mass of {self.name}", xtitle="t", ytitle="kg", fast=FreeRocket.fast_graphing)
             self.mass_plot = gcurve(graph=self.mass_graph, color=color.red, label="m")
 
+        if FreeRocket.thrust_graph_enable:
+            self.thrust_graph = graph(title=f"Thrust of {self.name}", xtitle="t", ytitle="N", fast=FreeRocket.fast_graphing)
+            self.thrust_plot = gcurve(graph=self.thrust_graph, color=color.red, label="Ft")
+
 
         self.v_max = 0  # m/s, maximum absolute velocity
         self.v_max_time = 0  # s, max velocity time
@@ -376,12 +382,12 @@ class FreeRocket:
         # end of constructor
 
     # Drag coefficient estimator
-    def cd_alpha(self, alpha):  # Generates parabola which interpolates b/w cd and cd_s from -pi/2 to +pi/2
-        return alpha ** 2 / ((pi / 2) ** 2 / (self.cd_s - self.cd)) + self.cd
+    def cd_alpha(self, alpha):  # Sine interpolation between frontal drag coefficient and side drag coefficient.
+        return abs(sin(alpha) * self.cd_s + cos(alpha) * self.cd)
 
     # Reference area estimator
-    def A_alpha(self, alpha):  # Generates parabola which interpolates b/w A and A_s from -pi/2 to +pi/2
-        return alpha ** 2 / ((pi / 2) ** 2 / (self.A_s - self.A)) + self.A
+    def A_alpha(self, alpha):  # Sine interpolation between frontal area and side area.
+        return abs(sin(alpha) * self.A_s + cos(alpha) * self.A)
 
     # Simulation 
     def simulate(self, t, dt):
@@ -485,11 +491,13 @@ class FreeRocket:
             self.rotation_rate_pitch.plot(t, self.drot.y)
             self.rotation_rate_roll.plot(t, self.drot.z)
         if FreeRocket.aoa_graph_enable:
-            self.aoa.plot(t, alpha)
+            self.aoa.plot(t, alpha/pi*180)
         if FreeRocket.drag_graph_enable:
             self.drag.plot(t, f_drag.mag)
         if FreeRocket.mass_graph_enable:
             self.mass_plot.plot(t, self.mass)
+        if FreeRocket.thrust_graph_enable:
+            self.thrust_plot.plot(t, f_thrust.mag)
 
         # Update flight report variables
         self.duration = t
@@ -529,61 +537,61 @@ class FreeRocket:
 
     def flight_report(self):
         print(f"{self.name} Flight Report -------------")
-        print(f"Apogee: {d2(self.y_max)}m at T+{d2(self.y_max_time)}s")
-        print(f"Maximum speed: {d2(self.v_max)}m/s at T+{d2(self.v_max_time)}s")
+        print(f"Apogee: {d2(self.y_max)}m ({d2(self.y_max*39.37/12)}ft) at T+{d2(self.y_max_time)}s")
+        print(f"Maximum speed: {d2(self.v_max)}m/s ({d2(self.v_max*39.37/12/5280*3600)}mph) at T+{d2(self.v_max_time)}s")
         print(f"Maximum acceleration: {d2(self.a_max)}m/s^2 ({d2(self.g_max)}g) at T+{d2(self.a_max_time)}s")
         print(f"Flight Duration: {d2(self.duration)}s")
-        print(f"Ground hit velocity: {d2(self.v_ground_hit)}m/s, {d2(self.pos.mag)}m downrange")
-        print(f"Maximum dynamic pressure: {d2(self.q_max / 1000)}kPa, at {d2(self.q_max_speed)}m/s, at T+{d2(self.q_max_time)}s")
+        print(f"Ground hit velocity: {d2(self.v_ground_hit)}m/s ({d2(self.v_ground_hit*39.37/12)}ft/s), {d2(self.pos.mag)}m downrange")
+        print(f"Maximum dynamic pressure: {d2(self.q_max / 1000)}kPa ({d2(self.q_max / 101325 * 14.7)}psig), at {d2(self.q_max_speed)}m/s, at T+{d2(self.q_max_time)}s")
         print(f"Maximum Mach number: {d2(self.mach_max)}M at T+{d2(self.mach_max_time)}s at {d2(self.mach_max_speed)}m/s at {d2(self.mach_max_altitude)}m altitude")
 
     # end of class def
 
+I435_time_points = [0,0.15,0.3,0.45,0.6,0.75,0.9,1.05,1.2,1.35,1.5,1.65,1.8,1.95,2.1,2.25,2.4]
+I435_thrust_points = [409.4694,447.336,451.1619,450.9657,369.0522,93.0969,76.8123,69.7491,55.2303,36.5913,27.6642,21.4839,17.9523,13.8321,5.4936,2.7468,2.1582]
+
+# thrust interpolation for 38mm 68-16-16 AP-Al motor test fired 3/16/2023
+def I435(t):
+    if t<=2.4:
+        return np.interp(t, I435_time_points, I435_thrust_points)
+    else:
+        return 0
 
 # thrust function approximation for I240 motor
 def I240(t):
     return -77 * (t - 0.2) ** 2 + 300
 
+# thrust function for LR-101 pressure-fed kerolox engine
+def LR101(t):
+    if t < 11:
+        return 830 * 4.448
+    else:
+        return 0
+
 # alpha phoenix fin coefficient of lift function
 def cl(aoa: float):
     return 2*pi*aoa # using NASA approx for thin subsonic airfoils
+
 # Beginning of actual program execution
 
-fin_1 = FinSet(4,vec(0,-0.152,0),vec(0,-0.162,0),0.005,10*pi/180,0.05,cl)
+AlphaPhoenixFins = dict(num_fins=4, center=vec(0,-0.152,0), pos=vec(0,-0.162,0), planform=0.005, stall_angle=10*pi/180, ac_span=0.05, cl_pass=cl)
+fin_1 = FinSet(**AlphaPhoenixFins)
 
-wind_1 = WindProfile("FAR", 3, 2, pi / 4, pi / 8, 100)
+FAR_wind = dict(name="FAR", mu=3, sigma=2, angle_mu=pi/4, angle_sigma=pi/8, step=100, print_debug=False)
+wind_1 = WindProfile(**FAR_wind)
 
 # Alpha Phoenix on I-300
-payload = FreeRocket(
-    "Alpha Phoenix",
-    vec(0, 1, 0),  # 3D linear position
-    0,  # yaw
-    90 * pi / 180,  # pitch
-    0,  # roll
-    5,  # v_0
-    0.0715,  # yaw moment of inertia
-    0.0715,  # pitch moment of inertia
-    0.0012,  # roll moment of inertia
-    vec(0,-0.152,0),  # center of pressure position vector
-    0.6,  # frontal drag coefficient
-    0.015,  # frontal reference area
-    1.5,  # side drag coefficient (orthogonal to long. axis)
-    0.05,  # side reference area (orthogonal to long. axis)
-    0.8,  # main parachute drag coefficient
-    0.4,  # main parachute ref. area
-    0.8,  # drogue chute drag coefficient
-    0.1,  # drogue chute ref. area
-    vec(0,-0.142,0),  # cg position vector
-    1.1,  # dry mass
-    0.220,  # fuel mass
-    I240,  # thrust function
-    0,  # ignition time
-    wind_1,  # wind profile
-    True, # whether to print debug statements during construction
-    fin_1
-)
+AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=0.6, A=0.015, cd_s=1.5, A_s = 0.05, chute_cd=0.8, chute_A=0.4, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I240, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
 
-graphics_3D = True
+# Theseus on LR-101
+TheseusFins= dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
+fin_theseus = FinSet(**TheseusFins)
+
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=0.6, A=0.32, cd_s=1.5, A_s=0.5, chute_cd=0.8, chute_A=1, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+
+payload = FreeRocket(**AlphaPhoenix)
+
+graphics_3D = False
 if graphics_3D:
     #payload_track = sphere(pos=payload.pos, size=vec(1,1,1), color=color.red, make_trail=True)
     yaw_arrow = arrow(pos=vec(0,0,0), axis=payload.global_yaw, color=color.red)
@@ -596,8 +604,8 @@ dtime = 1 / 20
 
 print(f"Time step: {dtime}")
 print("----BEGIN SIMULATION----")
-while time < 180 and payload.pos.y > 0:
-    sleep(1/8)
+while time < 120 and not payload.drogue:
+    #sleep(1/8)
     payload.simulate(time, dtime)
     if graphics_3D:
         #payload_track.pos = payload.pos
