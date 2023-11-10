@@ -70,12 +70,16 @@ def c(y):
     return sqrt(bulk_mod / rho(y))
 
 
-g_0 = -9.0866  # m/s^2, gravitational acceleration at MSL
+G = 6.674e-11  # Nm^2/kg^2, Universal gravitational constant
 
+g_0 = 9.80665 # m/s^2, Earth standard gravity
 
-# Gravitational acceleration function
-def g(y):
-    return g_0 * (6371009 / (6371009 + y)) ** 2
+M_E = 6e24 # kg, Earth mass
+
+# Gravitational force function
+# Takes altitude from mean sea level
+def g(y: float, mass: float):
+    return G * M_E * mass / (y+6371000)**2
 
 
 # wind profile class declaration
@@ -284,7 +288,7 @@ class FreeRocket:
             self.I_0.z * self.drot.z
         )
 
-        # State variables for drogue and main parachute deployment, NOT toggles for whether or not this deployment will occur.
+        # State variables for drogue and main parachute deployment, NOT deployment toggles.
         self.drogue = False
         self.main_chute = False
 
@@ -421,7 +425,7 @@ class FreeRocket:
             f_chute = vec(0, 0, 0)
 
         # GRAVITY FORCE
-        f_grav = vec(0, self.mass * g(self.pos.y), 0)
+        f_grav = vec(0, -g(self.pos.y, self.mass), 0)
 
         # THRUST VECTOR
         f_thrust = vec(0, 0, 0)
