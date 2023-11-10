@@ -132,9 +132,8 @@ class WindProfile:
         return yp_unit(angle, 0) * speed  # unit vector of angle, times speed
 
 # Fin set class declaration
+# Determines lift properties of fins only.  Drag is handled by the overall rocket cd, A, cd_s, and A_s
 class FinSet:
-
-
     def __init__(self, num_fins: int, center: vector, pos: vector, planform: float, stall_angle: float, ac_span: float, cl_pass):
         self.num_fins = num_fins # number of fins.  3 or 4 only supported at this time.
         self.fin_rad_pos = []
@@ -204,17 +203,17 @@ class FinSet:
 # Physics object class declaration
 class FreeRocket:
     # Graph switches
-    position_graph_enable = False  # Implemented
-    rotation_graph_enable = False  # Implemented
-    velocity_graph_enable = True  # Implemented
-    rotation_rate_graph_enable = False  # Implemented
-    acceleration_graph_enable = True  # Implemented
-    moment_graph_enable = False  # Implemented
-    side_profile_enable = True  # Implemented
-    top_profile_enable = False  # Implemented
-    aoa_graph_enable = True  # Implemented
-    drag_graph_enable = True  # Implemented
-    mass_graph_enable = True  # Implemented
+    position_graph_enable = False  
+    rotation_graph_enable = False  
+    velocity_graph_enable = True  
+    rotation_rate_graph_enable = False  
+    acceleration_graph_enable = True  
+    moment_graph_enable = False  
+    side_profile_enable = True  
+    top_profile_enable = False  
+    aoa_graph_enable = True  
+    drag_graph_enable = True  
+    mass_graph_enable = True  
     thrust_graph_enable = True 
 
     fast_graphing = False
@@ -259,8 +258,8 @@ class FreeRocket:
         self.fin = fin # Fin set
         # MASS PROPERTIES
         self.cg = cg  # m, center of mass position vector (see coordinate system definition above)
-        self.dry_mass = dry_mass  # kg, total dry mass
-        self.fuel_mass = fuel_mass  # lb to kg
+        self.dry_mass = dry_mass  # kg
+        self.fuel_mass = fuel_mass  # kg
         self.mass = self.dry_mass + self.fuel_mass  # kg, total initial mass
         # PROPULSION PROPERTIES
         self.thrust = thrust  # thrust function of time
@@ -274,15 +273,18 @@ class FreeRocket:
         self.bt = t  # s, motor burn time
         self.t0 = t0  # s, ignition time
         self.t1 = self.t0 + self.bt  # s, burnout time
+
         # MOMENTUM PROPERTIES
-        self.p = self.mass * self.v_0 * yp_unit(self.rot.x, self.rot.y)  # linear momentum
-        self.v = self.p / self.mass  # Linear velocity
+        self.p = self.mass * self.v_0 * yp_unit(self.rot.x, self.rot.y)  # kgm/s, Translational momentum
+        self.v = self.p / self.mass  # m/s, Translational velocity
         self.drot = vec(0, 0, 0)  # rad/s, yaw/pitch/roll rate
         self.L = vec(  # Angular momentum, yaw/pitch/roll
             self.I_0.x * self.drot.x,
             self.I_0.y * self.drot.y,
             self.I_0.z * self.drot.z
         )
+
+        # State variables for drogue and main parachute deployment, NOT toggles for whether or not this deployment will occur.
         self.drogue = False
         self.main_chute = False
 
@@ -587,7 +589,7 @@ AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180
 TheseusFins= dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=0.138, A=0.0411, cd_s=1, A_s=0.5, chute_cd=0.8, chute_A=1, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=0.425, A=0.0411, cd_s=1, A_s=0.5, chute_cd=0.8, chute_A=1, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
 
 payload = FreeRocket(**Theseus)
 
