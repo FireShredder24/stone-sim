@@ -79,7 +79,7 @@ M_E = 6e24 # kg, Earth mass
 # Gravitational force function
 # Takes altitude from mean sea level
 def g(y: float, mass: float):
-    return G * M_E * mass / (y+6371000)**2
+    return G * M_E * mass / (y+6378000)**2
 
 
 # wind profile class declaration
@@ -216,9 +216,8 @@ class FreeRocket:
     side_profile_enable = True  
     top_profile_enable = False  
     aoa_graph_enable = True  
-    drag_graph_enable = True  
+    force_graph_enable = True
     mass_graph_enable = True  
-    thrust_graph_enable = True 
 
     fast_graphing = False
 
@@ -318,6 +317,7 @@ class FreeRocket:
             self.acceleration_y = gcurve(graph=self.acceleration_graph, color=color.green, label="a<sub>y</sub>")  # m/s^2, y-axis acceleration
             self.acceleration_z = gcurve(graph=self.acceleration_graph, color=color.blue, label="a<sub>z</sub>")  # m/s^2, z-axis acceleration
             self.acceleration_total = gcurve(graph=self.acceleration_graph, color=color.black, label="a")  # m/s^2, total acceleration
+            self.acceleration_g = gcurve(graph=self.acceleration_graph, color=color.green, label="a<sub>g</sub>") # m/s^2, gravitational acceleration at this altitude
 
         if FreeRocket.position_graph_enable:
             self.position_graph = graph(title=f"Position of {self.name}", xtitle="t", ytitle="m", fast=FreeRocket.fast_graphing)
@@ -357,17 +357,15 @@ class FreeRocket:
             self.velocity_z = gcurve(graph=self.velocity_graph, color=color.blue, label="v<sub>z</sub>")
             self.velocity_total = gcurve(graph=self.velocity_graph, color=color.black, label="|v|")
 
-        if FreeRocket.drag_graph_enable:
-            self.drag_graph = graph(title=f"Force Due to Drag on {self.name}", xtitle="t", ytitle="N", fast=FreeRocket.fast_graphing)
-            self.drag = gcurve(graph=self.drag_graph, color=color.red, label="F<sub>d</sub>")
+        if FreeRocket.force_graph_enable:
+            self.force_graph = graph(title=f"Forces on {self.name}", xtitle="t", ytitle="N", fast=FreeRocket.fast_graphing)
+            self.drag_plot = gcurve(graph=self.force_graph, color=color.blue, label="F<sub>d</sub>")
+            self.thrust_plot = gcurve(graph=self.force_graph, color=color.red, label="F<sub>t</sub>")
+            self.gravity_plot = gcurve(graph=self.force_graph, color=color.green, label="F<sub>g</sub>")
 
         if FreeRocket.mass_graph_enable:
             self.mass_graph = graph(title=f"Mass of {self.name}", xtitle="t", ytitle="kg", fast=FreeRocket.fast_graphing)
             self.mass_plot = gcurve(graph=self.mass_graph, color=color.red, label="m")
-
-        if FreeRocket.thrust_graph_enable:
-            self.thrust_graph = graph(title=f"Thrust of {self.name}", xtitle="t", ytitle="N", fast=FreeRocket.fast_graphing)
-            self.thrust_plot = gcurve(graph=self.thrust_graph, color=color.red, label="Ft")
 
 
         self.v_max = 0  # m/s, maximum absolute velocity
@@ -497,18 +495,20 @@ class FreeRocket:
             self.acceleration_y.plot(t, f_net.y / self.mass)
             self.acceleration_z.plot(t, f_net.z / self.mass)
             self.acceleration_total.plot(t, f_net.mag / self.mass)
+            self.acceleration_g.plot(t, f_grav.mag / self.mass)
         if FreeRocket.rotation_rate_graph_enable:
             self.rotation_rate_yaw.plot(t, self.drot.x)
             self.rotation_rate_pitch.plot(t, self.drot.y)
             self.rotation_rate_roll.plot(t, self.drot.z)
         if FreeRocket.aoa_graph_enable:
             self.aoa.plot(t, alpha/pi*180)
-        if FreeRocket.drag_graph_enable:
-            self.drag.plot(t, f_drag.mag)
+        if FreeRocket.force_graph_enable:
+            self.drag_plot.plot(t, f_drag.mag)
+            self.thrust_plot.plot(t, f_thrust.mag)
+            self.gravity_plot.plot(t, f_grav.mag)
         if FreeRocket.mass_graph_enable:
             self.mass_plot.plot(t, self.mass)
-        if FreeRocket.thrust_graph_enable:
-            self.thrust_plot.plot(t, f_thrust.mag)
+
 
         # Update flight report variables
         self.duration = t
