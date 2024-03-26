@@ -233,7 +233,7 @@ class FreeRocket:
     # Positive yaw is clockwise when viewed normal to XY plane from +Z.
 
     # constructor
-    def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd: float, A: float, cd_s: float, A_s: float, chute_cd: float, chute_A: float,
+    def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd: float, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float,
                  drogue_cd: float, drogue_A: float, cg: vector, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet):
         self.name = name
         # FUNDAMENTAL VECTORS
@@ -254,6 +254,7 @@ class FreeRocket:
         self.A = A  # m^2, frontal reference area
         self.cd_s = cd_s  # side drag coefficient (airflow parallel to yaw/pitch axis)
         self.A_s = A_s  # side reference area " "
+        self.main_deploy_alt = main_deploy_alt # m, main parachute deployment altitude
         self.chute_cd = chute_cd  # parachute drag coefficient
         self.chute_A = chute_A  # m^2, parachute reference area
         self.drogue_cd = drogue_cd  # drogue chute cd
@@ -291,6 +292,7 @@ class FreeRocket:
         # State variables for drogue and main parachute deployment, NOT deployment toggles.
         self.drogue = False
         self.main_chute = False
+        self.main_time = 0 # Used in sim loop to track time after main deploy, for area ramp.  This prevents an unrealistically hard opening shock.
 
         # Debug prints
         if initDebug:
@@ -420,7 +422,9 @@ class FreeRocket:
 
         # MAIN PARACHUTE DRAG
         if self.main_chute:
-            f_chute = self.v.mag ** 2 * rho(self.pos.y) * self.chute_cd * self.chute_A / 2 * -self.v.hat
+            opening_time = 3
+            ramp = min(t - self.main_time,opening_time) / opening_time # Ramps parachute opening area over 1/2 second
+            f_chute = self.v.mag ** 2 * rho(self.pos.y) * self.chute_cd * self.chute_A * ramp / 2 * -self.v.hat
         else:
             f_chute = vec(0, 0, 0)
 
@@ -458,8 +462,9 @@ class FreeRocket:
             self.drogue = True
             print(f"{self.name} Drogue deployment at T+{d2(t)}s at Altitude:{d2(self.pos.y)}m & Speed:{d2(self.v.mag)}m/s")
 
-        if self.pos.y < 150 and self.drogue and not self.main_chute:
+        if self.pos.y < self.main_deploy_alt and self.drogue and not self.main_chute:
             self.main_chute = True
+            self.main_time = t
             print(f"{self.name} Main chute deployment at T+{d2(t)}s at Altitude:{d2(self.pos.y)}m & Speed:{d2(self.v.mag)}m/s")
 
         mach_n = mag(self.v + self.wind.wind(self.pos.y)) / c(self.pos.y)
@@ -553,6 +558,7 @@ class FreeRocket:
 
     # end of class def
 
+# Thrust curve data for a static fire test of the flight motor of author's rocket, Alpha Phoenix 
 I435_time_points = [0,0.15,0.3,0.45,0.6,0.75,0.9,1.05,1.2,1.35,1.5,1.65,1.8,1.95,2.1,2.25,2.4]
 I435_thrust_points = [409.4694,447.336,451.1619,450.9657,369.0522,93.0969,76.8123,69.7491,55.2303,36.5913,27.6642,21.4839,17.9523,13.8321,5.4936,2.7468,2.1582]
 
@@ -570,7 +576,7 @@ def I240(t):
 # thrust function for LR-101 pressure-fed kerolox engine
 def LR101(t):
     if t < 11:
-        return 830 * 4.448
+        return 830 * 4.448 # lbf * N/lbf
     else:
         return 0
 
@@ -587,15 +593,15 @@ FAR_wind = dict(name="FAR", mu=3, sigma=2, angle_mu=pi/4, angle_sigma=pi/8, step
 wind_1 = WindProfile(**FAR_wind)
 
 # Alpha Phoenix on I-300
-AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=0.6, A=0.015, cd_s=1.5, A_s = 0.05, chute_cd=0.8, chute_A=0.4, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I240, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
+AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=0.6, A=0.015, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I240, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
 
 # Theseus on LR-101
-TheseusFins= dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
+TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=0.425, A=0.0411, cd_s=1, A_s=0.5, chute_cd=0.8, chute_A=1, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=0.425, A=0.0411, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
 
-payload = FreeRocket(**Theseus)
+payload = FreeRocket(**AlphaPhoenix)
 
 graphics_3D = False
 if graphics_3D:
@@ -610,7 +616,7 @@ dtime = 1 / 20
 
 print(f"Time step: {dtime}")
 print("----BEGIN SIMULATION----")
-while time < 120 and not payload.drogue:
+while time < 120 and payload.pos.y >= 0:
     #sleep(1/8)
     payload.simulate(time, dtime)
     if graphics_3D:
@@ -623,7 +629,7 @@ while time < 120 and not payload.drogue:
         roll_arrow.axis = payload.global_roll
 
     time += dtime
-print("-----END SIMULATION-----")
+print("-----END SIMULATION-----\n")
 
 payload.flight_report()
 
