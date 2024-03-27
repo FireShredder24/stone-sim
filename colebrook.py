@@ -9,13 +9,11 @@ from math import sqrt, log
 
 
 k = 3.28e-6 * 12 # inch, from https://www.engineeringtoolbox.com/surface-roughness-ventilation-ducts-d_209.html
-D = 0.402 # inch, from fluids system design
-L = 2 # inch, from fluids system design
+D = 0.47 # inch, from fluids system design
 
-Re = 278303725.63 # dimensionless, from ideal gas calculation
-v = 13348 # inches per second, from ideal gas calculation
+Re = 490289 # dimensionless, from ideal gas calculation
 
-max_err = 0.0000001
+max_err = 0.000000000001
 
 def error(f):
     if f > 0:
