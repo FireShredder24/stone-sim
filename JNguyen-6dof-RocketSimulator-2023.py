@@ -214,7 +214,7 @@ class FreeRocket:
     acceleration_graph_enable = True  
     moment_graph_enable = False  
     side_profile_enable = True  
-    top_profile_enable = False  
+    top_profile_enable = True
     aoa_graph_enable = True  
     force_graph_enable = True
     mass_graph_enable = True  
@@ -232,7 +232,7 @@ class FreeRocket:
     # Positive yaw is clockwise when viewed normal to XY plane from +Z.
 
     # constructor
-    def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd: float, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float,
+    def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float,
                  drogue_cd: float, drogue_A: float, cg: vector, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet):
         self.name = name
         # FUNDAMENTAL VECTORS
@@ -249,7 +249,7 @@ class FreeRocket:
         self.global_pitch = rotate(yp_unit(self.rot.x + pi/2, self.rot.y), self.rot.z, self.global_roll)
         # AERODYNAMIC PROPERTIES
         self.cp = cp  # m, center of pressure position vector (see coordinate system definition above)
-        self.cd = cd  # frontal drag coefficient
+        self.cd = cd  # frontal drag coefficient FUNCTION
         self.A = A  # m^2, frontal reference area
         self.cd_s = cd_s  # side drag coefficient (airflow parallel to yaw/pitch axis)
         self.A_s = A_s  # side reference area " "
@@ -387,10 +387,6 @@ class FreeRocket:
         self.mach_max_altitude = 0 # m
         # end of constructor
 
-    # Drag coefficient estimator
-    def cd_alpha(self, alpha):  # Sine interpolation between frontal drag coefficient and side drag coefficient.
-        return abs(sin(alpha) * self.cd_s + cos(alpha) * self.cd)
-
     # Reference area estimator
     def A_alpha(self, alpha):  # Sine interpolation between frontal area and side area.
         return abs(sin(alpha) * self.A_s + cos(alpha) * self.A)
@@ -405,7 +401,7 @@ class FreeRocket:
             heading = yp_unit(self.rot.x, self.rot.y)  # 3d linear unit vector of vehicle orientation
             airflow = self.v + self.wind.wind(self.pos.y)  # 3d linear vector of oncoming airstream (reversed)
             alpha = math.acos(heading.dot(airflow.hat))  # rad, angle of attack
-            cd = self.cd_alpha(alpha)  # drag coefficient
+            cd = self.cd(self.v.mag / c(self.pos.y))  # drag coefficient
             A = self.A_alpha(alpha)  # m^2, reference area
             f_drag = airflow.mag ** 2 * rho(self.pos.y) * cd * A / 2 * -airflow.hat # N, body drag force
 
@@ -416,7 +412,7 @@ class FreeRocket:
 
             # DROGUE PARACHUTE DRAG
             if self.drogue:
-                f_drogue = self.v.mag ** 2 * rho(self.pos.y) * self.drogue_cd * self.drogue_A / 2 * -self.v.hat
+                f_drogue = self.v.mag ** 2 * rho(self.pos.y) * self.drogue_cd * self.drogue_A / 2 * -airflow.hat
             else:
                 f_drogue = vec(0, 0, 0)
 
@@ -424,7 +420,7 @@ class FreeRocket:
             if self.main_chute:
                 opening_time = 3
                 ramp = min(t - self.main_time,opening_time) / opening_time # Ramps parachute opening area over 1/2 second
-                f_chute = self.v.mag ** 2 * rho(self.pos.y) * self.chute_cd * self.chute_A * ramp / 2 * -self.v.hat
+                f_chute = self.v.mag ** 2 * rho(self.pos.y) * self.chute_cd * self.chute_A * ramp / 2 * -airflow.hat
             else:
                 f_chute = vec(0, 0, 0)
 
@@ -606,7 +602,12 @@ def LR101(t):
 def cl(aoa: float):
     return 2*pi*aoa # using NASA approx for thin subsonic airfoils
 
-# Beginning of actual program execution
+# Drag coefficient vs. Reynold's Number for Atlas missile (used as approximation)
+cd_M_points = np.array([0.016666666666666666, 0.125, 0.2583333333333333, 0.3833333333333333, 0.5, 0.6, 0.6833333333333333, 0.775, 0.85, 0.9333333333333333, 1, 1.1083333333333334, 1.1916666666666667, 1.2833333333333332, 1.3333333333333333, 1.4333333333333333, 1.525, 1.6, 1.6833333333333333, 1.775, 1.8666666666666667, 1.9583333333333333, 2.0666666666666664, 2.1916666666666664, 2.2916666666666665, 2.408333333333333, 2.55, 2.7, 2.875, 3.0666666666666664, 3.308333333333333, 3.5416666666666665, 3.8, 4.1, 4.525, 5.016666666666667, 5.575, 6.108333333333333, 6.583333333333333, 7.016666666666667, 7.566666666666666, 8.058333333333334, 8.6, 9.108333333333333, 9.775, 10.041666666666666])
+cd_points = np.array([0.30000000000000004, 0.28303571428571433, 0.2696428571428572, 0.26428571428571435, 0.26071428571428573, 0.26875000000000004, 0.28035714285714286, 0.3008928571428572, 0.32946428571428577, 0.3642857142857143, 0.40267857142857155, 0.4535714285714286, 0.4955357142857144, 0.5312500000000001, 0.5482142857142859, 0.5535714285714287, 0.5508928571428573, 0.542857142857143, 0.5330357142857144, 0.5205357142857144, 0.5062500000000001, 0.4848214285714286, 0.461607142857143, 0.4321428571428573, 0.40535714285714297, 0.3812500000000001, 0.35357142857142865, 0.32678571428571435, 0.3008928571428572, 0.275, 0.25, 0.23214285714285715, 0.21785714285714286, 0.2080357142857143, 0.2017857142857143, 0.19910714285714287, 0.20357142857142857, 0.21160714285714288, 0.2205357142857143, 0.23035714285714287, 0.24196428571428574, 0.2517857142857143, 0.2598214285714286, 0.26160714285714287, 0.26160714285714287, 0.26160714285714287])
+def cd_atlas(M: float):
+    return np.interp(M,cd_M_points,cd_points)
+
 
 AlphaPhoenixFins = dict(num_fins=4, center=vec(0,-0.152,0), pos=vec(0,-0.162,0), planform=0.005, stall_angle=10*pi/180, ac_span=0.05, cl_pass=cl)
 fin_1 = FinSet(**AlphaPhoenixFins)
@@ -615,24 +616,18 @@ FAR_wind = dict(name="FAR", mu=3, sigma=2, angle_mu=pi/4, angle_sigma=pi/8, step
 wind_1 = WindProfile(**FAR_wind)
 
 # Alpha Phoenix on I-300
-AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=0.6, A=(2.4/2/39.4)**2*np.pi, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I435, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
+AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=cd_atlas, A=(2.4/2/39.4)**2*np.pi, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(8/39.4/2)**2*np.pi, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I435, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
 
 # Theseus on LR-101
 TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=0.425, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+
+# Beginning of actual program execution
 
 booster = FreeRocket(**Theseus)
 payload = FreeRocket(**AlphaPhoenix)
-
-graphics_3D = False
-if graphics_3D:
-    #payload_track = sphere(pos=payload.pos, size=vec(1,1,1), color=color.red, make_trail=True)
-    yaw_arrow = arrow(pos=vec(0,0,0), axis=payload.global_yaw, color=color.red)
-    pitch_arrow = arrow(pos=vec(0,0,0), axis=payload.global_pitch, color=color.green)
-    roll_arrow = arrow(pos=vec(0,0,0), axis=payload.global_pitch, color=color.blue)
-    #v_arrow = arrow(pos=vec(0,0,0), axis=payload.v * 10, color=color.black)
 
 time = 0
 dtime = 1 / 20
@@ -647,7 +642,7 @@ while time < booster.bt:
 payload.inherit(booster) # Payload inherits linear and angular momentum from the booster, among other things
 payload.t0 = time # Setting motor burn times to make the thrust functions work properly
 payload.t1 = time + payload.bt
-while time < 120 and payload.pos.y > 0:
+while time < 240 and payload.pos.y > 0:
     payload.simulate(time, dtime)
     booster.simulate(time, dtime)
     time += dtime
