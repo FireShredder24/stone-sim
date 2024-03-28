@@ -21,8 +21,6 @@ Abstract:
 
 Planned features:
 
-	Multistage rockets
-
 	Orbital trajectories
 
 	More reliable roll and fin lift simulation
