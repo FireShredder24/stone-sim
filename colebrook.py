@@ -9,9 +9,9 @@ from math import sqrt, log
 
 
 k = 3.28e-6 * 12 # inch, from https://www.engineeringtoolbox.com/surface-roughness-ventilation-ducts-d_209.html
-D = 0.47 # inch, from fluids system design
+D = 0.5 # inch, from fluids system design
 
-Re = 490289 # dimensionless, from ideal gas calculation
+Re = 723250 # dimensionless, from ideal gas calculation
 
 max_err = 0.000000000001
 
