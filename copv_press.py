@@ -31,14 +31,16 @@ fuel_dr_press = 644.7 # psia, fuel side dome regulator pressure setting
 
 T_amb = 530 # R, ambient temperature
 
-copv_press = 1000 # psi, initial COPV pressure
-copv_T = T_amb
+copv_press = 1800 # psi, initial COPV pressure
+copv_T = T_amb # R, initial COPV temperature
 
 ox_ul_press = 500 # psia, initial ox tank ullage gas pressure
 fuel_ul_press = 644 # psia, initial fuel tank ullage gas pressure
-ox_total_press = ox_ul_press
-fuel_total_press = fuel_ul_press
+ox_total_press = ox_ul_press # psia, initial total pressure
+fuel_total_press = fuel_ul_press # psia, initial total pressure
 
+ox_press_drop = 45 # psia, pressure drop over piping between dome regulator and tank
+fuel_press_drop = 30 # psia, pressure drop over piping between dome regulator and tank
 
 ox_ul_vol = 100 # cu. in., initial gas volume in ox tank
 fuel_ul_vol = 100 # cu. in., initial gas volume in fuel tank
@@ -55,8 +57,8 @@ ox_T_boil = 162.4 # R, oxidizer boiling point
 ox_T = 200 # R, oxidizer initial temperature
 ox_rho_l = 71.16 / 12**3 # lb / in^3
 ox_heat_vap = 91.7 # BTU / lbm
-ox_vap_press = vapor_pressure(ox_heat_vap, ox_M, ox_T_boil, ox_T)
-ox_total_press += ox_vap_press
+ox_vap_press = vapor_pressure(ox_heat_vap, ox_M, ox_T_boil, ox_T) # psia, ox vapor partial pressure
+ox_total_press += ox_vap_press # psia, ox tank total pressure
 ox_c_l = 0.219 # BTU / lbm / R
 ox_cp = 0.22 # BTU / lbm / R, specific heat at constant pressure
 ox_cv = 0.16 # BTU / lbm / R, specific heat at constant volume
@@ -70,8 +72,8 @@ fuel_T = T_amb # R, fuel initial temperature
 fuel_T_boil = 770 # R, fuel boiling point
 fuel_rho_l = 51.1 / 12**3 # lb / in^3, liquid phase density
 fuel_heat_vap = 108 # BTU / lbm, heat of vaporization
-fuel_vap_press = vapor_pressure(fuel_heat_vap, fuel_M, fuel_T_boil, fuel_T)
-fuel_total_press += fuel_vap_press
+fuel_vap_press = vapor_pressure(fuel_heat_vap, fuel_M, fuel_T_boil, fuel_T) # psia, fuel vapor partial pressure
+fuel_total_press += fuel_vap_press # psia, fuel tank total pressure
 fuel_c_l = 0.48 # BTU / lbm / R
 # values for kerosene unknown.  Using same as nitrogen since kerosene unlikely to vaporize sigificantly
 fuel_cp = 0.25 # BTU / lbm / R, specific heat at constant pressure
@@ -94,6 +96,8 @@ ox_ul_mass = ul_M * ox_ul_press * ox_ul_vol / R_inlb / ox_T
 fuel_vapor_mass = fuel_M * fuel_vap_press * fuel_ul_vol / R_inlb / fuel_T
 fuel_ul_mass = ul_M * fuel_ul_press * fuel_ul_vol / R_inlb / fuel_T
 
+copv_ul_mass = ul_M * copv_press * copv_vol / R_inlb / copv_T
+
 print(f"Regulated pressure-fed rocket feed system simulator")
 print(f"COPV: {copv_vol} in^3 of {ul_name} at {copv_press} psia and {ul_T} R")
 print(f"Oxidizer: {ox_ul_vol}/{ox_tank_vol} in^3 of {ox_name} at {ox_T} R with initial pressure {ox_total_press:.2f} psia")
@@ -101,25 +105,25 @@ print(f"Fuel: {fuel_ul_vol}/{fuel_tank_vol} in^3 of {fuel_name} at {fuel_T} R wi
 print(f"Oxidizer flow: {ox_vol_rate:.2f} in^3/s at {ox_dr_press} psia")
 print(f"Fuel flow: {fuel_vol_rate:.2f} in^3/s at {fuel_dr_press} psia")
 
-press_graph = graph(title="Pressure", fast=False)
+press_graph = graph(title="Pressure", fast=False, xtitle="s", ytitle="psia")
 copv_press_curve = gcurve(graph=press_graph, label="COPV", color=color.green)
 ox_press_curve = gcurve(graph=press_graph, label="OX", color=color.blue)
 ox_vap_press_curve = gcurve(graph=press_graph, label="OX VAP", color=color.purple)
 fuel_press_curve = gcurve(graph=press_graph, label="FUEL", color=color.red)
 fuel_vap_press_curve = gcurve(graph=press_graph, label="FUEL VAP", color=color.orange)
 
-temp_graph = graph(title="Temperature", fast=False)
+temp_graph = graph(title="Temperature", fast=False, xtitle="s", ytitle="R")
 copv_T_curve = gcurve(graph=temp_graph, label="COPV", color=color.green)
 ox_T_curve = gcurve(graph=temp_graph, label="OX", color=color.blue)
 ox_dr_T_curve = gcurve(graph=temp_graph, label="OX DR", color=color.purple)
 fuel_T_curve = gcurve(graph=temp_graph, label="FUEL", color=color.red)
 fuel_dr_T_curve = gcurve(graph=temp_graph, label="FUEL DR", color=color.orange)
 
-volume_graph = graph(title="Volume", fast=False)
+volume_graph = graph(title="Volume", fast=False, xtitle="s", ytitle="in^3")
 ox_vol_curve = gcurve(graph=volume_graph, label="OX", color=color.blue)
 fuel_vol_curve = gcurve(graph=volume_graph, label="FUEL", color=color.red)
 
-mass_graph = graph(title="Mass", fast=False)
+mass_graph = graph(title="Mass", fast=False, xtitle="s", ytitle="lbm")
 copv_mass_curve = gcurve(graph=mass_graph, label="COPV", color=color.green)
 ox_ul_mass_curve = gcurve(graph=mass_graph, label="OX UL", color=color.blue)
 ox_vap_mass_curve = gcurve(graph=mass_graph, label="OX VAP", color=color.purple)
@@ -127,7 +131,7 @@ fuel_ul_mass_curve = gcurve(graph=mass_graph, label="FUEL UL", color=color.red)
 fuel_vap_mass_curve = gcurve(graph=mass_graph, label="FUEL VAP", color=color.orange)
 
 t = 0
-dt = 0.1
+dt = 0.025
 
 print("Begin simulation")
 while ox_ul_vol <= ox_tank_vol and fuel_ul_vol <= fuel_tank_vol and t < 30:
@@ -138,19 +142,23 @@ while ox_ul_vol <= ox_tank_vol and fuel_ul_vol <= fuel_tank_vol and t < 30:
     ox_vap_press = vapor_pressure(ox_heat_vap, ox_M, ox_T_boil, ox_T)
     fuel_vap_press = vapor_pressure(fuel_heat_vap, fuel_M, fuel_T_boil, fuel_T)
 
-    # First we need to check the temperature at the dome regulator outlets
+    # First we need to calculate the temperature at the dome regulator outlets
     ox_dr_T = copv_T * (ox_dr_press / copv_press) ** (1-ul_cv/ul_cp)
     fuel_dr_T = copv_T * (fuel_dr_press / copv_press) ** (1-ul_cv/ul_cp)
 
     # Then using this we determine the mass of ullage gas being added to the tanks
-    if copv_press > ox_dr_press:
-        ox_new_mass = ul_M * ox_dr_press * ox_vol_rate / R_inlb / ox_dr_T * dt
+    if ox_dr_press > ox_total_press:
+        ox_new_mass = ul_M * min(copv_press,ox_dr_press) * ox_vol_rate / R_inlb / ox_dr_T * dt
     else:
         ox_new_mass = 0
-    if copv_press > fuel_dr_press:
-        fuel_new_mass = ul_M * fuel_dr_press * fuel_vol_rate / R_inlb / fuel_dr_T * dt
+    if fuel_dr_press > fuel_total_press:
+        fuel_new_mass = ul_M * min(copv_press, fuel_dr_press) * fuel_vol_rate / R_inlb / fuel_dr_T * dt
     else:
         fuel_new_mass = 0
+
+    # Then, due to pressure drop over the pipework, the temperature of the gas entering the tanks will be lower
+    ox_dr_T = ox_dr_T * ((ox_dr_press - ox_press_drop) / ox_dr_press) ** (1-ul_cv/ul_cp)
+    fuel_dr_T = fuel_dr_T * ((fuel_dr_press - fuel_press_drop) / fuel_dr_press) ** (1-ul_cv/ul_cp)
 
     # Then we take the existing mass within the tanks and determine the final temperature
 
@@ -170,27 +178,26 @@ while ox_ul_vol <= ox_tank_vol and fuel_ul_vol <= fuel_tank_vol and t < 30:
     fuel_ul_vol += fuel_vol_rate * dt
 
     # And now update the COPV pressure and temperature
-    copv_start_mass = ul_M * copv_press * copv_vol / R_inlb / copv_T
+    copv_ul_mass -= ox_new_mass + fuel_new_mass
     copv_press_old = copv_press
-    copv_press = (copv_start_mass - ox_new_mass - fuel_new_mass) / ul_M * R_inlb * copv_T / copv_vol
+    copv_press = copv_ul_mass / ul_M * R_inlb * copv_T / copv_vol
     copv_T = copv_T*(copv_press / copv_press_old) ** (1-ul_cv/ul_cp)
 
     # Update vapor and ullage mass
 
     ox_vapor_mass = ox_M * ox_vap_press * ox_ul_vol / R_inlb / ox_T
-    ox_ul_mass = ul_M * ox_ul_press * ox_ul_vol / R_inlb / ox_T
+    ox_ul_mass += ox_new_mass
 
     fuel_vapor_mass = fuel_M * fuel_vap_press * fuel_ul_vol / R_inlb / fuel_T
-    fuel_ul_mass = ul_M * fuel_ul_press * fuel_ul_vol / R_inlb / fuel_T
+    fuel_ul_mass += fuel_new_mass
 
     # Printing for posterity
     print(f"t={t:.2f}, copv: {copv_press:.0f} psia & {copv_T:.0f} R, ox at {ox_total_press:.0f} psia & {ox_T:.0f} R, fuel at {fuel_total_press:.0f} psia & {fuel_T:.0f} R")
-    print(f"copv start: {copv_start_mass}, copv delta {-(ox_new_mass + fuel_new_mass)/dt}")
 
     # Graphing
     copv_press_curve.plot(t, copv_press)
     copv_T_curve.plot(t, copv_T)
-    copv_mass_curve.plot(t, copv_start_mass-ox_new_mass-fuel_new_mass)
+    copv_mass_curve.plot(t, copv_ul_mass)
     ox_press_curve.plot(t, ox_total_press)
     ox_vap_press_curve.plot(t, ox_vap_press)
     ox_T_curve.plot(t, ox_T)
