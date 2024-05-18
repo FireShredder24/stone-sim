@@ -22,24 +22,24 @@ def vapor_pressure(h_vap, M, boil, T):
 
 # System definitions
 
-copv_vol = 732 # cu. in.
-ox_tank_vol = 924 # cu. in.
-fuel_tank_vol = 924 # cu. in.
+copv_vol = 416 # cu. in.
+ox_tank_vol = 980 # cu. in.
+fuel_tank_vol = 814 # cu. in.
 
-ox_dr_press = 584.7 # psia, ox side dome regulator pressure setting
-fuel_dr_press = 644.7 # psia, fuel side dome regulator pressure setting
+ox_dr_press = 600 + 14.7 # psia, ox side dome regulator pressure setting
+fuel_dr_press = 565 + 14.7 # psia, fuel side dome regulator pressure setting
 
 T_amb = 530 # R, ambient temperature
 
-copv_press = 1800 # psi, initial COPV pressure
+copv_press = 3000
 copv_T = T_amb # R, initial COPV temperature
 
-ox_ul_press = 500 # psia, initial ox tank ullage gas pressure
-fuel_ul_press = 644 # psia, initial fuel tank ullage gas pressure
+ox_ul_press = 600 + 14.7 # psia, initial ox tank ullage gas pressure
+fuel_ul_press = 565 + 14.7 # psia, initial fuel tank ullage gas pressure
 ox_total_press = ox_ul_press # psia, initial total pressure
 fuel_total_press = fuel_ul_press # psia, initial total pressure
 
-ox_press_drop = 45 # psia, pressure drop over piping between dome regulator and tank
+ox_press_drop = 58 # psia, pressure drop over piping between dome regulator and tank
 fuel_press_drop = 30 # psia, pressure drop over piping between dome regulator and tank
 
 ox_ul_vol = 100 # cu. in., initial gas volume in ox tank
