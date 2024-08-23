@@ -593,7 +593,7 @@ def I240(t):
 
 # thrust function for LR-101 pressure-fed kerolox engine
 def LR101(t):
-    if t < 11:
+    if t < 9.59:
         return 830 * 4.448 # lbf * N/lbf
     else:
         return 0
@@ -622,31 +622,23 @@ AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180
 TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=200/2.204, fuel_mass=46.345/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=(180 + 6.35)/2.204, fuel_mass=40/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
 
 # Beginning of actual program execution
 
 booster = FreeRocket(**Theseus)
-payload = FreeRocket(**AlphaPhoenix)
+# payload = FreeRocket(**AlphaPhoenix)
 
 time = 0
-dtime = 1 / 20
+dtime = 1 / 10
 
 print(f"Time step: {dtime}")
 print("----BEGIN SIMULATION----")
-booster.mass += payload.mass
-while time < booster.bt:
+# booster.mass += payload.mass
+while booster.pos.y > 0:
     booster.simulate(time, dtime)
 
-    time += dtime
-payload.inherit(booster) # Payload inherits linear and angular momentum from the booster, among other things
-payload.t0 = time # Setting motor burn times to make the thrust functions work properly
-payload.t1 = time + payload.bt
-while time < 240 and payload.pos.y > 0:
-    payload.simulate(time, dtime)
-    booster.simulate(time, dtime)
     time += dtime
 print("-----END SIMULATION-----\n")
 
-payload.flight_report()
 booster.flight_report()
