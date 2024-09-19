@@ -3,7 +3,7 @@ Rocket simulator created by John Nguyen
 
 Requirements:
 
-Python 3.10.13 with VPython 7.6.4
+Python 3 with VPython
 
 Usage:
 
@@ -21,11 +21,9 @@ Abstract:
 
 Planned features:
 
-	Orbital trajectories
+	Thrust vector control and inertial guidance
 
-	More reliable roll and fin lift simulation
 
-	More recovery system options
 
 Copyright © 2024 John Nguyen
 

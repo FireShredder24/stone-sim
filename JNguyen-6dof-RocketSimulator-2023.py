@@ -41,7 +41,7 @@ def rho(y):  # kg/m^3 air pressure
     elif 32000 < y <= 47000:
         dens = -(0.0132 - 0.002) / (47000 - 32000) * (y - 32000) + 0.0132
     else:
-        dens = 0
+        dens = 1/1000000000
     return dens
 
 
@@ -67,8 +67,10 @@ def P(y):
 
 # speed of sound function
 def c(y):
-    return sqrt(bulk_mod / rho(y))
-
+    if y > 0:
+        return sqrt(bulk_mod / rho(y))
+    else:
+        return 343
 
 G = 6.674e-11  # Nm^2/kg^2, Universal gravitational constant
 
@@ -118,6 +120,8 @@ class WindProfile:
         index = (altitude + 50) / self.step  # normalize to band number
         band_pos = index - floor(index)  # relative position within altitude band
         index = abs(int(index))  # convert to positive whole number for table index
+        if index >= len(self.angleSet) - 1:
+            return vec(0,0,0);
         angle = self.angleSet[index]  # grab angle from wind band
         speed = self.speedSet[index]  # grab speed from wind band
         if band_pos <= 0.2:  # if in the lower 20% of wind band, interpolate to the avg. b/w current and previous bands
@@ -207,7 +211,7 @@ class FinSet:
 # Physics object class declaration
 class FreeRocket:
     # Graph switches
-    position_graph_enable = False  
+    position_graph_enable = True  
     rotation_graph_enable = False  
     velocity_graph_enable = True  
     rotation_rate_graph_enable = False  
@@ -593,8 +597,15 @@ def I240(t):
 
 # thrust function for LR-101 pressure-fed kerolox engine
 def LR101(t):
-    if t < 9.59:
+    if t < 7.68:
         return 830 * 4.448 # lbf * N/lbf
+    else:
+        return 0
+
+# thrust function for Sharkshot pressure fed LOX/Kerosene engine
+def Hammerhead(t):
+    if t < 75:
+        return 2000 * 4.448 # lbf * N/lbf
     else:
         return 0
 
@@ -622,22 +633,37 @@ AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180
 TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=(180 + 6.35)/2.204, fuel_mass=40/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=(145.35)/2.204, fuel_mass=32/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+
+# SharkShot on BL-1500
+SharkShotFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0, -5.2, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
+fin_sharkshot = FinSet(**SharkShotFins)
+
+SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.5*100, pmi=0.5*100, rmi=0.05*100, cp=vec(0,-4,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-4.5+8/39.37,0), dry_mass=(481)/2.204, fuel_mass=652.5/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
+
+
+
 
 # Beginning of actual program execution
 
-booster = FreeRocket(**Theseus)
+booster = FreeRocket(**SharkShot)
 # payload = FreeRocket(**AlphaPhoenix)
 
 time = 0
-dtime = 1 / 10
+dtime = 1 / 100
 
-print(f"Time step: {dtime}")
+print(f"Time step: {dtime:.3f}")
 print("----BEGIN SIMULATION----")
 # booster.mass += payload.mass
-while booster.pos.y > 0:
+while booster.pos.y < 21:
     booster.simulate(time, dtime)
+    time += dtime
 
+dtime = 1 / 10
+print(f"Rocket cleared launch rail at {booster.v.y * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
+
+while booster.pos.y > 10:
+    booster.simulate(time, dtime)
     time += dtime
 print("-----END SIMULATION-----\n")
 
