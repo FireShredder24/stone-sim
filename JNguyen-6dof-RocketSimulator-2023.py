@@ -65,12 +65,12 @@ def P(y):
     return rho(y) * r_spec * temp(y)
 
 
-# speed of sound function
+# speed of sound, interpolated from Engineering Toolbox
 def c(y):
-    if y > 0:
-        return sqrt(bulk_mod / rho(y))
-    else:
-        return 343
+    c_points = [344,340,330,320,310,300,295,295,300,300]
+    y_points = [-1000,0,2500,5000,7500,10000,11000,20000,25000,100000]
+    return np.interp(y,y_points,c_points)
+
 
 G = 6.674e-11  # Nm^2/kg^2, Universal gravitational constant
 
@@ -604,7 +604,7 @@ def LR101(t):
 
 # thrust function for Sharkshot pressure fed LOX/Kerosene engine
 def Hammerhead(t):
-    if t < 75:
+    if t < 80:
         return 2000 * 4.448 # lbf * N/lbf
     else:
         return 0
@@ -635,11 +635,11 @@ fin_theseus = FinSet(**TheseusFins)
 
 Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=(145.35)/2.204, fuel_mass=32/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
 
-# SharkShot on BL-1500
+# SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0, -5.2, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 fin_sharkshot = FinSet(**SharkShotFins)
 
-SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.5*100, pmi=0.5*100, rmi=0.05*100, cp=vec(0,-4,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-4.5+8/39.37,0), dry_mass=(481)/2.204, fuel_mass=652.5/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
+SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.5*100, pmi=0.5*100, rmi=0.05*100, cp=vec(0,-4,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-4.5+8/39.37,0), dry_mass=(489.9)/2.204, fuel_mass=696/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
 
 
 
