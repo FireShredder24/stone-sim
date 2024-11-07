@@ -147,18 +147,17 @@ class FinSet:
         self.fin_rad_pos = []
         for a in arange(0, 2*pi, 2*pi/num_fins):
             self.fin_rad_pos.append(a)
-        print(f"Fin radial positions: {self.fin_rad_pos}")
         self.center = center # position of center of mass relative to parent rocket nose tip
         self.pos = pos # position of center of lift relative to parent rocket nose tip
         self.planform = planform # planform wing area of each individual fin
         self.stall_angle = stall_angle # maximum angle of attack before wing stall
         self.ac_span = ac_span # radial offset from rocket centerline to center of lift of each fin
         self.cl = cl_pass
-        self.aoa_graph = graph(fast=False, title="Fin AoA", xtitle="t", ytitle="rad")
+        self.aoa_graph = graph(fast=False, title="Fin AoA", xtitle="t", ytitle="degrees")
         self.aoa_curves = []
         for i in self.fin_rad_pos:
-            self.aoa_curves.append(gcurve(graph=self.aoa_graph, label=f"Fin {i} AoA", color=color.blue))
-        self.curve = gcurve(graph=self.aoa_graph, label="fin 0 aoa", color=color.red)
+            self.aoa_curves.append(gcurve(graph=self.aoa_graph, label=f"Fin {d2(i*180/np.pi)} AoA", color=color.blue))
+        # self.curve = gcurve(graph=self.aoa_graph, label="fin 0 aoa", color=color.red)
 
     def ac_pos(self, rot: vector, fin_index: int):
         if fin_index > self.num_fins - 1:
@@ -196,7 +195,7 @@ class FinSet:
     # Iterates through each fin and plots its angle of attack
     def aoa_plot(self, t: float, rot:vector, airflow:vector, roll:vector):
         for idx, i in enumerate(self.aoa_curves):
-            i.plot(t, self.aoa(rot, idx, airflow, roll))
+            i.plot(t, self.aoa(rot, idx, airflow, roll)*180/np.pi)
 
     def total_lift_vec(self, rot: vector, airflow: vector, roll: vector, altitude: float):
         L_total = vec(0,0,0)
@@ -212,7 +211,7 @@ class FinSet:
 class FreeRocket:
     # Graph switches
     position_graph_enable = True  
-    rotation_graph_enable = False  
+    rotation_graph_enable = False
     velocity_graph_enable = True  
     rotation_rate_graph_enable = False  
     acceleration_graph_enable = True  
@@ -222,6 +221,7 @@ class FreeRocket:
     aoa_graph_enable = True  
     force_graph_enable = True
     mass_graph_enable = True  
+    fin_aoa_graph_enable = False
 
     fast_graphing = False
 
@@ -460,12 +460,12 @@ class FreeRocket:
 
             if self.v.y < 5 and not self.drogue:
                 self.drogue = True
-                print(f"{self.name} Drogue deployment at T+{d2(t)}s at Altitude:{d2(self.pos.y)}m & Speed:{d2(self.v.mag)}m/s")
+                print(f"{self.name} Drogue deployment at T+{d2(t)}s at Altitude:{d2(self.pos.y*39.4/12)}ft & Speed:{d2(self.v.mag*39.4/12)}ft/s")
 
             if self.pos.y < self.main_deploy_alt and self.drogue and not self.main_chute:
                 self.main_chute = True
                 self.main_time = t
-                print(f"{self.name} Main chute deployment at T+{d2(t)}s at Altitude:{d2(self.pos.y)}m & Speed:{d2(self.v.mag)}m/s")
+                print(f"{self.name} Main chute deployment at T+{d2(t)}s at Altitude:{d2(self.pos.y*39.4/12)}ft & Speed:{d2(self.v.mag*39.4/12)}ft/s")
 
             mach_n = mag(self.v + self.wind.wind(self.pos.y)) / c(self.pos.y)
             # Graph switched variables
@@ -510,7 +510,8 @@ class FreeRocket:
                 self.gravity_plot.plot(t, f_grav.mag)
             if FreeRocket.mass_graph_enable:
                 self.mass_plot.plot(t, self.mass)
-
+            if FreeRocket.fin_aoa_graph_enable:
+                self.fin.aoa_plot(t, self.rot, airflow, self.cg)
 
             # Update flight report variables
             self.duration = t
@@ -525,7 +526,7 @@ class FreeRocket:
                 self.a_max = a
                 self.g_max = a / abs(g_0)
                 self.a_max_time = t
-            if self.pos.y <= 0:
+            if self.pos.y <= 10:
                 self.duration = t
                 self.v_ground_hit = self.v.mag
             q = 1/2*rho(self.pos.y)*self.v.mag**2
@@ -539,9 +540,6 @@ class FreeRocket:
                 self.mach_max_speed = self.v.mag
                 self.mach_max_altitude = self.pos.y
 
-            #normalized_airflow = vec(airflow.dot(vec(1,0,0)))
-            self.fin.aoa_plot(t, self.rot, airflow, self.cg)
-
             self.global_roll = yp_unit(self.rot.x, self.rot.y)  # RocCS base vectors, transformed to GCS
             self.global_yaw = rotate(yp_unit(self.rot.x, self.rot.y + pi/2), self.rot.z, self.global_roll)
             self.global_pitch = rotate(yp_unit(self.rot.x + pi/2, self.rot.y), self.rot.z, self.global_roll)
@@ -550,13 +548,13 @@ class FreeRocket:
 
     def flight_report(self):
         print(f"\n{self.name} Flight Report -------------\n")
-        print(f"Apogee: {d2(self.y_max)}m ({d2(self.y_max*39.37/12)}ft) at T+{d2(self.y_max_time)}s")
-        print(f"Maximum speed: {d2(self.v_max)}m/s ({d2(self.v_max*39.37/12/5280*3600)}mph) at T+{d2(self.v_max_time)}s")
-        print(f"Maximum acceleration: {d2(self.a_max)}m/s^2 ({d2(self.g_max)}g) at T+{d2(self.a_max_time)}s")
+        print(f"Apogee: {d2(self.y_max*39.37/12)}ft at T+{d2(self.y_max_time)}s")
+        print(f"Maximum speed: {d2(self.v_max*39.37/12/5280*3600)}mph at T+{d2(self.v_max_time)}s")
+        print(f"Maximum acceleration: {d2(self.g_max)}G at T+{d2(self.a_max_time)}s")
         print(f"Flight Duration: {d2(self.duration)}s")
-        print(f"Ground hit velocity: {d2(self.v_ground_hit)}m/s ({d2(self.v_ground_hit*39.37/12)}ft/s), {d2(self.pos.mag)}m downrange")
-        print(f"Maximum dynamic pressure: {d2(self.q_max / 1000)}kPa ({d2(self.q_max / 101325 * 14.7)}psig), at {d2(self.q_max_speed)}m/s, at T+{d2(self.q_max_time)}s")
-        print(f"Maximum Mach number: {d2(self.mach_max)}M at T+{d2(self.mach_max_time)}s at {d2(self.mach_max_speed)}m/s at {d2(self.mach_max_altitude)}m altitude\n")
+        print(f"Ground hit velocity: {d2(self.v_ground_hit*39.37/12)}ft/s, {d2(self.pos.mag*39.4/12)}ft downrange")
+        print(f"Maximum dynamic pressure: {d2(self.q_max / 101325 * 14.7)}psig, at {d2(self.q_max_speed*39.4/12)}ft/s, at T+{d2(self.q_max_time)}s")
+        print(f"Maximum Mach number: {d2(self.mach_max)}M at T+{d2(self.mach_max_time)}s at {d2(self.mach_max_speed*39.4/12)}ft/s at {d2(self.mach_max_altitude*39.4/12)}ft altitude\n")
 
         # end of flight report method
 
@@ -597,7 +595,7 @@ def I240(t):
 
 # thrust function for LR-101 pressure-fed kerolox engine
 def LR101(t):
-    if t < 7.68:
+    if t < 9:
         return 830 * 4.448 # lbf * N/lbf
     else:
         return 0
@@ -621,32 +619,32 @@ def cd_atlas(M: float):
 
 
 AlphaPhoenixFins = dict(num_fins=4, center=vec(0,-0.152,0), pos=vec(0,-0.162,0), planform=0.005, stall_angle=10*pi/180, ac_span=0.05, cl_pass=cl)
-fin_1 = FinSet(**AlphaPhoenixFins)
+# fin_1 = FinSet(**AlphaPhoenixFins)
 
 FAR_wind = dict(name="FAR", mu=3, sigma=2, angle_mu=pi/4, angle_sigma=pi/8, step=100, print_debug=False)
 wind_1 = WindProfile(**FAR_wind)
 
 # Alpha Phoenix on I-300
-AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=cd_atlas, A=(2.4/2/39.4)**2*np.pi, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(8/39.4/2)**2*np.pi, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I435, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
+# AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=cd_atlas, A=(2.4/2/39.4)**2*np.pi, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(8/39.4/2)**2*np.pi, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I435, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
 
 # Theseus on LR-101
 TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.1, cg=vec(0,-4.5+8/39.37,0), dry_mass=(145.35)/2.204, fuel_mass=32/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=True, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(180/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi, cg=vec(0,-4.5+8/39.37,0), dry_mass=(132)/2.204, fuel_mass=37.8/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=fin_theseus)
 
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0, -5.2, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
-fin_sharkshot = FinSet(**SharkShotFins)
+# fin_sharkshot = FinSet(**SharkShotFins)
 
-SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.5*100, pmi=0.5*100, rmi=0.05*100, cp=vec(0,-4,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-4.5+8/39.37,0), dry_mass=(489.9)/2.204, fuel_mass=696/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
+# SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.5*100, pmi=0.5*100, rmi=0.05*100, cp=vec(0,-4,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-4.5+8/39.37,0), dry_mass=(489.9)/2.204, fuel_mass=696/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
 
 
 
 
 # Beginning of actual program execution
 
-booster = FreeRocket(**SharkShot)
+booster = FreeRocket(**Theseus)
 # payload = FreeRocket(**AlphaPhoenix)
 
 time = 0
