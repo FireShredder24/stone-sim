@@ -306,69 +306,69 @@ class FreeRocket:
         # Graph object declaration
 
         if FreeRocket.side_profile_enable:
-            self.flight_side_graph = graph(title=f"Side Profile of {self.name}", xtitle="Downrange Distance",
-                                       ytitle="Altitude (m)", fast=FreeRocket.fast_graphing)
+            self.flight_side_graph = graph(title=f"Side Profile of {self.name}", xtitle="Downrange Distance (ft)",
+                                       ytitle="Altitude (ft)", fast=FreeRocket.fast_graphing)
             self.flight_side = gcurve(graph=self.flight_side_graph, color=color.green, label="Side-on Track")
 
         if FreeRocket.top_profile_enable:
-            self.flight_top_graph = graph(title="Top Profile of " + self.name, xtitle="x",
-                                          ytitle="z", fast=FreeRocket.fast_graphing)
+            self.flight_top_graph = graph(title="Top Profile of " + self.name, xtitle="x (ft)",
+                                          ytitle="z (ft)", fast=FreeRocket.fast_graphing)
             self.flight_top = gcurve(graph=self.flight_top_graph, color=color.blue, label="Top-Down Track")
 
         if FreeRocket.acceleration_graph_enable:
-            self.acceleration_graph = graph(title=f"Acceleration of {self.name}", xtitle="t", ytitle="m/s^2", fast=FreeRocket.fast_graphing)
-            self.acceleration_x = gcurve(graph=self.acceleration_graph, color=color.red, label="a<sub>x</sub>")  # m/s^2, x-axis acceleration
-            self.acceleration_y = gcurve(graph=self.acceleration_graph, color=color.green, label="a<sub>y</sub>")  # m/s^2, y-axis acceleration
-            self.acceleration_z = gcurve(graph=self.acceleration_graph, color=color.blue, label="a<sub>z</sub>")  # m/s^2, z-axis acceleration
-            self.acceleration_total = gcurve(graph=self.acceleration_graph, color=color.black, label="a")  # m/s^2, total acceleration
-            self.acceleration_g = gcurve(graph=self.acceleration_graph, color=color.green, label="a<sub>g</sub>") # m/s^2, gravitational acceleration at this altitude
+            self.acceleration_graph = graph(title=f"Acceleration of {self.name}", xtitle="t", ytitle="G", fast=FreeRocket.fast_graphing)
+            self.acceleration_x = gcurve(graph=self.acceleration_graph, color=color.red, label="a<sub>x</sub>")  # G, x-axis acceleration
+            self.acceleration_y = gcurve(graph=self.acceleration_graph, color=color.green, label="a<sub>y</sub>")  # G, y-axis acceleration
+            self.acceleration_z = gcurve(graph=self.acceleration_graph, color=color.blue, label="a<sub>z</sub>")  # G, z-axis acceleration
+            self.acceleration_total = gcurve(graph=self.acceleration_graph, color=color.black, label="a")  # G, total acceleration
+            self.acceleration_g = gcurve(graph=self.acceleration_graph, color=color.green, label="a<sub>g</sub>") # G, gravitational acceleration at this altitude
 
         if FreeRocket.position_graph_enable:
-            self.position_graph = graph(title=f"Position of {self.name}", xtitle="t", ytitle="m", fast=FreeRocket.fast_graphing)
-            self.position_x = gcurve(graph=self.position_graph, color=color.red, label="x")  # m, x position
-            self.position_y = gcurve(graph=self.position_graph, color=color.green, label="y")  # m, y position
-            self.position_z = gcurve(graph=self.position_graph, color=color.blue, label="z")  # m, z position
-            self.position_total = gcurve(graph=self.position_graph, color=color.black, label="Downrange distance")  # m, downrange distance
+            self.position_graph = graph(title=f"Position of {self.name}", xtitle="seconds", ytitle="ft", fast=FreeRocket.fast_graphing)
+            self.position_x = gcurve(graph=self.position_graph, color=color.red, label="x")  # ft, x position
+            self.position_y = gcurve(graph=self.position_graph, color=color.green, label="y")  # ft, y position
+            self.position_z = gcurve(graph=self.position_graph, color=color.blue, label="z")  # ft, z position
+            self.position_total = gcurve(graph=self.position_graph, color=color.black, label="Downrange distance")  # ft, downrange distance
 
         if FreeRocket.rotation_graph_enable:
-            self.rotation_graph = graph(title=f"Orientation of {self.name}", xtitle="t", ytitle="radians", fast=FreeRocket.fast_graphing)
+            self.rotation_graph = graph(title=f"Orientation of {self.name}", xtitle="seconds", ytitle="degrees", fast=FreeRocket.fast_graphing)
             self.rotation_yaw = gcurve(graph=self.rotation_graph, color=color.red, label="Yaw")
             self.rotation_pitch = gcurve(graph=self.rotation_graph, color=color.green, label="Pitch")
             self.rotation_roll = gcurve(graph=self.rotation_graph, color=color.blue, label="Roll")
 
         if FreeRocket.rotation_rate_graph_enable:
-            self.rotation_rate_graph = graph(title=f"Rotation rate of {self.name}", xtitle="t", ytitle="radians/s", fast=FreeRocket.fast_graphing)
+            self.rotation_rate_graph = graph(title=f"Rotation rate of {self.name}", xtitle="seconds", ytitle="degrees/s", fast=FreeRocket.fast_graphing)
             self.rotation_rate_yaw = gcurve(graph=self.rotation_rate_graph, color=color.red, label="Yaw rate")
             self.rotation_rate_pitch = gcurve(graph=self.rotation_rate_graph, color=color.green, label="Pitch rate")
             self.rotation_rate_roll = gcurve(graph=self.rotation_rate_graph, color=color.blue, label="Roll rate")
             self.rotation_rate_total = gcurve(graph=self.rotation_rate_graph, color=color.black, label="Total rate")
 
         if FreeRocket.aoa_graph_enable:
-            self.aoa_graph = graph(title=f"AoA of {self.name}", xtitle="t", ytitle="alpha, degrees", fast=FreeRocket.fast_graphing)
-            self.aoa = gcurve(graph=self.aoa_graph, color=color.red, label="alpha")  # rad, Angle of attack
+            self.aoa_graph = graph(title=f"AoA of {self.name}", xtitle="seconds", ytitle="alpha, degrees", fast=FreeRocket.fast_graphing)
+            self.aoa = gcurve(graph=self.aoa_graph, color=color.red, label="alpha")  # degrees, Angle of attack
 
         if FreeRocket.moment_graph_enable:
-            self.moment_graph = graph(title=f"Moments on {self.name}", xtitle="t", ytitle="Nm", fast=FreeRocket.fast_graphing)
+            self.moment_graph = graph(title=f"Moments on {self.name}", xtitle="seconds", ytitle="lb-ft", fast=FreeRocket.fast_graphing)
             self.moment_yaw = gcurve(graph=self.moment_graph, color=color.red, label="Yaw moment")
             self.moment_pitch = gcurve(graph=self.moment_graph, color=color.green, label="Pitch moment")
             self.moment_roll = gcurve(graph=self.moment_graph, color=color.blue, label="Roll moment")
             self.moment_total = gcurve(graph=self.moment_graph, color=color.black, label="Total moment")
 
         if FreeRocket.velocity_graph_enable:
-            self.velocity_graph = graph(title=f"Velocity of {self.name}", xtitle="t", ytitle="m/s", fast=FreeRocket.fast_graphing)
+            self.velocity_graph = graph(title=f"Velocity of {self.name}", xtitle="seconds", ytitle="ft/s", fast=FreeRocket.fast_graphing)
             self.velocity_x = gcurve(graph=self.velocity_graph, color=color.red, label="v<sub>x</sub>")
             self.velocity_y = gcurve(graph=self.velocity_graph, color=color.green, label="v<sub>y</sub>")
             self.velocity_z = gcurve(graph=self.velocity_graph, color=color.blue, label="v<sub>z</sub>")
             self.velocity_total = gcurve(graph=self.velocity_graph, color=color.black, label="|v|")
 
         if FreeRocket.force_graph_enable:
-            self.force_graph = graph(title=f"Forces on {self.name}", xtitle="t", ytitle="N", fast=FreeRocket.fast_graphing)
+            self.force_graph = graph(title=f"Forces on {self.name}", xtitle="seconds", ytitle="lbf", fast=FreeRocket.fast_graphing)
             self.drag_plot = gcurve(graph=self.force_graph, color=color.blue, label="F<sub>d</sub>")
             self.thrust_plot = gcurve(graph=self.force_graph, color=color.red, label="F<sub>t</sub>")
             self.gravity_plot = gcurve(graph=self.force_graph, color=color.green, label="F<sub>g</sub>")
 
         if FreeRocket.mass_graph_enable:
-            self.mass_graph = graph(title=f"Mass of {self.name}", xtitle="t", ytitle="kg", fast=FreeRocket.fast_graphing)
+            self.mass_graph = graph(title=f"Mass of {self.name}", xtitle="seconds", ytitle="lbm", fast=FreeRocket.fast_graphing)
             self.mass_plot = gcurve(graph=self.mass_graph, color=color.red, label="m")
 
 
@@ -470,46 +470,46 @@ class FreeRocket:
             mach_n = mag(self.v + self.wind.wind(self.pos.y)) / c(self.pos.y)
             # Graph switched variables
             if FreeRocket.side_profile_enable:
-                self.flight_side.plot(sqrt(self.pos.x**2 + self.pos.z**2), self.pos.y)
+                self.flight_side.plot(sqrt((self.pos.x*39.4/12)**2 + (self.pos.z*39.4/12)**2), self.pos.y*39.4/12)
             if FreeRocket.top_profile_enable:
-                self.flight_top.plot(self.pos.x, self.pos.z)
+                self.flight_top.plot(self.pos.x*39.4/12, self.pos.z*39.4/12)
             if FreeRocket.moment_graph_enable:
-                self.moment_yaw.plot(t, M_net.x)
-                self.moment_pitch.plot(t, M_net.y)
-                self.moment_roll.plot(t, M_net.z)
-                self.moment_total.plot(t, M_net.mag)
+                self.moment_yaw.plot(t, M_net.x*39.4/12/4.448)
+                self.moment_pitch.plot(t, M_net.y*39.4/12/4.448)
+                self.moment_roll.plot(t, M_net.z*39.4/12/4.448)
+                self.moment_total.plot(t, M_net.mag*39.4/12/4.448)
             if FreeRocket.velocity_graph_enable:
-                self.velocity_x.plot(t, self.v.x)
-                self.velocity_y.plot(t, self.v.y)
-                self.velocity_z.plot(t, self.v.z)
-                self.velocity_total.plot(t, self.v.mag)
+                self.velocity_x.plot(t, self.v.x*39.4/12)
+                self.velocity_y.plot(t, self.v.y*39.4/12)
+                self.velocity_z.plot(t, self.v.z*39.4/12)
+                self.velocity_total.plot(t, self.v.mag*39.4/12)
             if FreeRocket.position_graph_enable:
-                self.position_x.plot(t, self.pos.x)
-                self.position_y.plot(t, self.pos.y)
-                self.position_z.plot(t, self.pos.z)
-                self.position_total.plot(t, self.pos.mag)
+                self.position_x.plot(t, self.pos.x*39.4/12)
+                self.position_y.plot(t, self.pos.y*39.4/12)
+                self.position_z.plot(t, self.pos.z*39.4/12)
+                self.position_total.plot(t, sqrt((self.pos.x*39.4/12)**2 + (self.pos.z*39.4/12)**2))
             if FreeRocket.rotation_graph_enable:
-                self.rotation_yaw.plot(t, self.rot.x)
-                self.rotation_pitch.plot(t, self.rot.y)
-                self.rotation_roll.plot(t, self.rot.z)
+                self.rotation_yaw.plot(t, self.rot.x*180/np.pi)
+                self.rotation_pitch.plot(t, self.rot.y*180/np.pi)
+                self.rotation_roll.plot(t, self.rot.z*180/np.pi)
             if FreeRocket.acceleration_graph_enable:
-                self.acceleration_x.plot(t, f_net.x / self.mass)
-                self.acceleration_y.plot(t, f_net.y / self.mass)
-                self.acceleration_z.plot(t, f_net.z / self.mass)
-                self.acceleration_total.plot(t, f_net.mag / self.mass)
-                self.acceleration_g.plot(t, f_grav.mag / self.mass)
+                self.acceleration_x.plot(t, f_net.x / self.mass * 39.4/12 / 32.174)
+                self.acceleration_y.plot(t, f_net.y / self.mass * 39.4/12 / 32.174)
+                self.acceleration_z.plot(t, f_net.z / self.mass * 39.4/12 / 32.174)
+                self.acceleration_total.plot(t, f_net.mag / self.mass * 39.4/12 / 32.174)
+                self.acceleration_g.plot(t, f_grav.mag / self.mass * 39.4/12 / 32.174)
             if FreeRocket.rotation_rate_graph_enable:
-                self.rotation_rate_yaw.plot(t, self.drot.x)
-                self.rotation_rate_pitch.plot(t, self.drot.y)
-                self.rotation_rate_roll.plot(t, self.drot.z)
+                self.rotation_rate_yaw.plot(t, self.drot.x * 180/np.pi)
+                self.rotation_rate_pitch.plot(t, self.drot.y * 180/np.pi)
+                self.rotation_rate_roll.plot(t, self.drot.z * 180/np.pi)
             if FreeRocket.aoa_graph_enable:
-                self.aoa.plot(t, alpha/pi*180)
+                self.aoa.plot(t, alpha/np.pi*180)
             if FreeRocket.force_graph_enable:
-                self.drag_plot.plot(t, f_drag.mag)
-                self.thrust_plot.plot(t, f_thrust.mag)
-                self.gravity_plot.plot(t, f_grav.mag)
+                self.drag_plot.plot(t, f_drag.mag / 4.448)
+                self.thrust_plot.plot(t, f_thrust.mag / 4.448)
+                self.gravity_plot.plot(t, f_grav.mag / 4.448)
             if FreeRocket.mass_graph_enable:
-                self.mass_plot.plot(t, self.mass)
+                self.mass_plot.plot(t, self.mass * 2.204)
             if FreeRocket.fin_aoa_graph_enable:
                 self.fin.aoa_plot(t, self.rot, airflow, self.cg)
 
@@ -631,7 +631,7 @@ wind_1 = WindProfile(**FAR_wind)
 TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=1, chute_A=(180/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi, cg=vec(0,-4.5+8/39.37,0), dry_mass=(132)/2.204, fuel_mass=37.8/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, cg=vec(0,-4.5+8/39.37,0), dry_mass=(135.4)/2.204, fuel_mass=37.8/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=fin_theseus)
 
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0, -5.2, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
