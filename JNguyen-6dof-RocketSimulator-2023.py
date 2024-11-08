@@ -23,12 +23,9 @@ def d2(num):
     return "{:.2f}".format(num)
 
 # ENVIRONMENT FUNCTIONS
-# bulk modulus of elasticity of air (used for speed of sound)
-bulk_mod = 1.01325 * 10 ** 5  # Pa
 
 # Specific gas constant of air (R/M)
 r_spec = 287.05  # J/(kg * K)
-
 
 # air density function, based on International Standard Atmosphere
 def rho(y):  # kg/m^3 air pressure
