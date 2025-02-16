@@ -225,12 +225,9 @@ class FreeRocket:
 
     # Rocket centric coordinate system definition:
     # Origin point is tip of the nose cone, to physically ground all dimensions.
-    # Y axis is the roll axis, with fore being positive and aft being negative.
-    # Positive roll is counterclockwise when viewed normal to XZ plane from +Y.
-    # X axis is the pitch axis, with starboard being positive and port being negative.
-    # Positive pitch is counterclockwise when viewed normal to YZ plane from +X.
-    # Z axis is the yaw axis, with dorsal being positive and ventral being negative.
-    # Positive yaw is clockwise when viewed normal to XY plane from +Z.
+    # Y axis is the yaw axis, with ventral being positive and dorsal being negative.
+    # X axis is the pitch axis, with port being positive and starboard being negative.
+    # Z axis is the roll axis, with fore being positive and aft being negative.
 
     # constructor
     def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float,
@@ -450,7 +447,7 @@ class FreeRocket:
             # End of movement during this iteration
 
             # Remove burned fuel from vehicle mass
-            # Assumes fuel mass loss is proportional to thrust
+            # Assumes fuel mass flow rate is proportional to thrust
             self.mass = self.mass - f_thrust.mag * dt / self.J * self.fuel_mass
 
             # Parachute deployment checks
@@ -550,7 +547,7 @@ class FreeRocket:
         print(f"Maximum acceleration: {d2(self.g_max)}G at T+{d2(self.a_max_time)}s")
         print(f"Flight Duration: {d2(self.duration)}s")
         print(f"Ground hit velocity: {d2(self.v_ground_hit*39.37/12)}ft/s, {d2(self.pos.mag*39.4/12)}ft downrange")
-        print(f"Maximum dynamic pressure: {d2(self.q_max / 101325 * 14.7)}psig, at {d2(self.q_max_speed*39.4/12)}ft/s, at T+{d2(self.q_max_time)}s")
+        print(f"Maximum dynamic pressure: {d2(self.q_max*4.448/39.37**2)}psig, at {d2(self.q_max_speed*39.4/12)}ft/s, at T+{d2(self.q_max_time)}s")
         print(f"Maximum Mach number: {d2(self.mach_max)}M at T+{d2(self.mach_max_time)}s at {d2(self.mach_max_speed*39.4/12)}ft/s at {d2(self.mach_max_altitude*39.4/12)}ft altitude\n")
 
         # end of flight report method
@@ -599,8 +596,8 @@ def LR101(t):
 
 # thrust function for Sharkshot pressure fed LOX/Kerosene engine
 def Hammerhead(t):
-    if t < 80:
-        return 2000 * 4.448 # lbf * N/lbf
+    if t < 46.67:
+        return (1.3459e-4*t**4 -1.8691e-2*t**3 +1.1033*t**2 -4.2319e+1*t +2.0298e+3) * 4.448 # lbf
     else:
         return 0
 
@@ -626,23 +623,22 @@ wind_1 = WindProfile(**FAR_wind)
 
 # Theseus on LR-101
 TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
-fin_theseus = FinSet(**TheseusFins)
+# fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, cg=vec(0,-4.5+8/39.37,0), dry_mass=(135.4)/2.204, fuel_mass=37.8/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=fin_theseus)
+#Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, cg=vec(0,-4.5+8/39.37,0), dry_mass=(135.4)/2.204, fuel_mass=37.8/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=fin_theseus)
 
 # SharkShot on Hammerhead
-SharkShotFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0, -5.2, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
-# fin_sharkshot = FinSet(**SharkShotFins)
+SharkShotFins = dict(num_fins=4, center=vec(0,-110/39.4,0), pos=vec(0, -110/39.4, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
+fin_sharkshot = FinSet(**SharkShotFins)
 
-# SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.5*100, pmi=0.5*100, rmi=0.05*100, cp=vec(0,-4,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-4.5+8/39.37,0), dry_mass=(489.9)/2.204, fuel_mass=696/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
+SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=63750/2.2/39.37**2, pmi=63750/2.2/39.37**2, rmi=640/2.2/39.37**2, cp=vec(0,-85.5/39.37,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-163/39.37,0), dry_mass=(217.41)/2.204, fuel_mass=290.98/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
 
 
 
 
 # Beginning of actual program execution
 
-booster = FreeRocket(**Theseus)
-# payload = FreeRocket(**AlphaPhoenix)
+booster = FreeRocket(**SharkShot)
 
 time = 0
 dtime = 1 / 100
