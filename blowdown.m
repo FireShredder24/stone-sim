@@ -3,18 +3,18 @@
 % MIT License
 
 % initial properties
-oxP0 = 400 % psia initial oxidizer tank pressure
-oxV0 = 2.18 % ft3 initial oxidizer ullage volume
-oxmdot0 = 4.943 % lbm/s initial oxidizer mass flow rate
-fuP0 = 400 % psia initial fuel tank pressure
-fuV0 = 1.996 % ft3 initial fuel ullage volume
-fumdot0 = 3.531 % lbm/s initial fuel tank pressure
+oxP0 = 300 % psia initial oxidizer tank pressure
+oxV0 = 3.967 % ft3 initial oxidizer ullage volume
+oxmdot0 = 11.464 % lbm/s initial oxidizer mass flow rate
+fuP0 = 300 % psia initial fuel tank pressure
+fuV0 = 2.894 % ft3 initial fuel ullage volume
+fumdot0 = 6.034 % lbm/s initial fuel tank pressure
 ofr0 = oxmdot0/fumdot0 % initial O/F ratio
 oxrho = 68 % lbm/ft3 oxidizer density
-furho = 53 % lbm/ft3 fuel density
+furho = 49 % lbm/ft3 fuel density
 
-T0 = 2033.569 % lbf, initial thrust
-Pc0 = 200 % psia initial chamber pressure
+T0 = 4435.744 % lbf, initial thrust
+Pc0 = 120 % psia initial chamber pressure
 
 % flow constants
 oxbeta = Pc0/oxmdot0 % psia*s/lbm ox chamber pressure constant
@@ -23,14 +23,14 @@ fubeta = Pc0/fumdot0 % psia*s/lbm fuel chamber pressure constant
 fualpha = fumdot0/sqrt(fuP0-Pc0) % lbm/s/sqrt(psia) fuel injector constant
 
 % end conditions
-oxVf = 4.676 % ft3 final oxidizer ullage volume
-fuVf = 4.284 % ft3 final fuel ullage volume
+oxVf = 8.245 % ft3 final oxidizer ullage volume
+fuVf = 6.019 % ft3 final fuel ullage volume
 tmax = 60 % maximum runtime
-minofr = 1.2 % minimum o/f ratio
-maxofr = 1.6 % maximum o/f ratio
+minofr = 1.7 % minimum o/f ratio
+maxofr = 2.1 % maximum o/f ratio
 
-n_points = tmax * 1/dt
 dt = 0.003
+n_points = tmax * 1/dt
 t = 0
 n = 1
 

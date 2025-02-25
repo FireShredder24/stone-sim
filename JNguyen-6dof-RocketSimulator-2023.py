@@ -383,6 +383,9 @@ class FreeRocket:
         self.mach_max_time = 0 # s
         self.mach_max_speed = 0 # m/s
         self.mach_max_altitude = 0 # m
+        self.drag_loss = 0 # m/s
+        self.grav_loss = 0 # m/s
+        self.cosine_loss = 0 # m/s
         # end of constructor
 
     # Reference area estimator
@@ -438,7 +441,7 @@ class FreeRocket:
 
             self.p = self.p + f_net * dt  # incrementing linear momentum
             self.v = self.p / self.mass  # calculating velocity
-            self.pos = self.pos + self.v * dt  # incrementing position
+            self.pos = self.pos + self.v * dt + f_net/self.mass*dt**2 / 2# incrementing position
 
             self.L += M_net * dt  # incrementing angular momentum
             self.drot = vec(self.L.x / self.I_0.x, self.L.y / self.I_0.y, self.L.z / self.I_0.z)  # calculating rotation rate
@@ -509,6 +512,10 @@ class FreeRocket:
 
             # Update flight report variables
             self.duration = t
+            if f_thrust.mag > 0:
+                self.drag_loss += f_drag.mag / self.mass * dt
+                self.grav_loss += f_grav.mag / self.mass * dt
+                self.cosine_loss += (f_thrust.mag - f_thrust.dot(vec(0,1,0))) / self.mass * dt
             if self.pos.y > self.y_max:
                 self.y_max = self.pos.y
                 self.y_max_time = t
@@ -549,6 +556,7 @@ class FreeRocket:
         print(f"Ground hit velocity: {d2(self.v_ground_hit*39.37/12)}ft/s, {d2(self.pos.mag*39.4/12)}ft downrange")
         print(f"Maximum dynamic pressure: {d2(self.q_max*4.448/39.37**2)}psig, at {d2(self.q_max_speed*39.4/12)}ft/s, at T+{d2(self.q_max_time)}s")
         print(f"Maximum Mach number: {d2(self.mach_max)}M at T+{d2(self.mach_max_time)}s at {d2(self.mach_max_speed*39.4/12)}ft/s at {d2(self.mach_max_altitude*39.4/12)}ft altitude\n")
+        print(f"Drag losses: {d2(self.drag_loss)} m/s, Gravity losses: {d2(self.grav_loss)} m/s, Cosine losses: {d2(self.cosine_loss)} m/s")
 
         # end of flight report method
 
@@ -596,8 +604,8 @@ def LR101(t):
 
 # thrust function for Sharkshot pressure fed LOX/Kerosene engine
 def Hammerhead(t):
-    if t < 46.67:
-        return (1.3459e-4*t**4 -1.8691e-2*t**3 +1.1033*t**2 -4.2319e+1*t +2.0298e+3) * 4.448 # lbf
+    if t < 33.306:
+        return (8.5084e-04*t**4 -8.6203e-02*t**3 + 3.7832e+00*t**2 -1.1188e+02*t + 4.4303e+03) * 4.448 # lbf
     else:
         return 0
 
@@ -631,7 +639,7 @@ TheseusFins = dict(num_fins=4, center=vec(0,-5,0), pos=vec(0,-5.2,0), planform=0
 SharkShotFins = dict(num_fins=4, center=vec(0,-110/39.4,0), pos=vec(0, -110/39.4, 0), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 fin_sharkshot = FinSet(**SharkShotFins)
 
-SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=63750/2.2/39.37**2, pmi=63750/2.2/39.37**2, rmi=640/2.2/39.37**2, cp=vec(0,-85.5/39.37,0), cd=cd_atlas, A=(18/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-163/39.37,0), dry_mass=(217.41)/2.204, fuel_mass=290.98/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
+SharkShot = dict(name="SharkShot", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=302899/2.2/39.37**2, pmi=302899/2.2/39.37**2, rmi=304/2.2/39.37**2, cp=vec(0,-85.5/39.37,0), cd=cd_atlas, A=(16/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,-163/39.37,0), dry_mass=(189.651)/2.204, fuel_mass=444.026/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
 
 
 
@@ -653,7 +661,7 @@ while booster.pos.y < 21:
 dtime = 1 / 10
 print(f"Rocket cleared launch rail at {booster.v.y * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
-while booster.pos.y > 10:
+while not booster.drogue:
     booster.simulate(time, dtime)
     time += dtime
 print("-----END SIMULATION-----\n")
