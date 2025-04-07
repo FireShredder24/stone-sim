@@ -208,16 +208,16 @@ class FinSet:
 class FreeRocket:
     # Graph switches
     position_graph_enable = True  
-    rotation_graph_enable = False
+    rotation_graph_enable = True
     velocity_graph_enable = True  
-    rotation_rate_graph_enable = False  
+    rotation_rate_graph_enable = True  
     acceleration_graph_enable = True  
-    moment_graph_enable = False  
-    side_profile_enable = True  
-    top_profile_enable = True
+    moment_graph_enable = True  
+    side_profile_enable = False
+    top_profile_enable = False
     aoa_graph_enable = True  
     force_graph_enable = True
-    mass_graph_enable = True  
+    mass_graph_enable = False
     fin_aoa_graph_enable = False
 
     fast_graphing = False
