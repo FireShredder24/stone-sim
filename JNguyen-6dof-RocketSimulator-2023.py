@@ -202,6 +202,63 @@ class FinSet:
             L_total = L_total + L
         return L_total
 
+# 3-axis RCS system using 8 thrusters at the top of the rocket.  Capable of full yaw/pitch/roll control.
+class ReactionControlSystem:
+    # set gains to zero by default
+    self.kp = 0
+    self.ki = 0
+    self.kd = 0
+    self.izone = 0
+    # set physical properties to zero by default
+    self.fuel_mass = 0
+    self.ct = vec(0,0,0)
+    self.cg = vec(0,0,0)
+    self.thrust = 0
+    self.throttle = False
+    # Set initial setpoint and pose to upwards by default
+    self.setpoint = vec(0,0,1)
+    self.pose = vec(0,0,1)
+
+    # Constructs fundamental characteristics
+    def ReactionControlSystem(fuel_mass: float, cg: vector, ct: vector, thrust: float, throttle: bool)
+        self.fuel_mass = fuel_mass
+        self.cg = cg # Center of mass
+        self.ct = ct # Center of thrust
+        self.thrust = thrust # Max thrust per thruster
+        self.throttle = throttle # If true, can proportionally throttle thrusters
+
+    # Initialize or update the angular rate PID controller.
+    def setPID(kp: float, ki: float, kd: float, izone: float)
+        self.kp = kp # Proportional gain
+        self.ki = ki # Integral gain
+        self.kd = kd # Derivative gain
+        self.izone = izone # Integral min & max
+    
+    # Initialize or update the angular rate trapezoid profile parameters. 
+    def setProfile(max_alpha: float, max_omega: float, min_err: float)
+        self.max_alpha = max_alpha # magnitude of maximum angular acceleration
+        self.max_omega = max_omega # magnitude of maximum angular velocity
+        self.min_err = min_err # minimum angular error to apply guidance
+
+    # Set the guidance heading request.
+    def setReference(setpoint: vector)
+        self.setpoint = setpoint.hat
+
+    # Update the current rocket pose.
+    def setPose(pose: vector, omega: vector)
+        self.pose = pose.hat
+        self.omega = omega
+
+    # Retrieve the current total thrust vector exerted by RCS.
+    def getThrust()
+        error = diff_angle(self.setpoint,self.pose)
+        if error > self.min_err:
+            
+            return thrust
+        else:
+            return vec(0,0,0)
+        
+
 
 
 # Physics object class declaration
