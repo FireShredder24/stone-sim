@@ -78,9 +78,9 @@ M_E = 6e24 # kg, Earth mass
 cg_E = vec(0,0,-6371000) # m, position of the center of the Earth
 
 # Gravitational force function
-# Takes altitude from mean sea level
-def g(y: float, mass: float):
-    return G * M_E * mass / (y+6378000)**2
+# Returns a vector pointing at the center of the Earth
+def g(pos: vector, mass: float):
+    return G * M_E * mass / (mag(cg_E - pos))**2 * hat(cg_E-pos)
 
 
 # wind profile class declaration
@@ -152,10 +152,10 @@ class FinSet:
         self.stall_angle = stall_angle # maximum angle of attack before wing stall
         self.ac_span = ac_span # radial offset from rocket centerline to center of lift of each fin
         self.cl = cl_pass
-        self.aoa_graph = graph(fast=False, title="Fin AoA", xtitle="t", ytitle="degrees")
-        self.aoa_curves = []
-        for i in self.fin_rad_pos:
-            self.aoa_curves.append(gcurve(graph=self.aoa_graph, label=f"Fin {d2(i*180/np.pi)} AoA", color=color.blue))
+        #self.aoa_graph = graph(fast=False, title="Fin AoA", xtitle="t", ytitle="degrees")
+        #self.aoa_curves = []
+        #for i in self.fin_rad_pos:
+        #    self.aoa_curves.append(gcurve(graph=self.aoa_graph, label=f"Fin {d2(i*180/np.pi)} AoA", color=color.blue))
         # self.curve = gcurve(graph=self.aoa_graph, label="fin 0 aoa", color=color.red)
 
     def ac_pos(self, rot: vector, fin_index: int):
@@ -498,7 +498,7 @@ class FreeRocket:
             f_chute = vec(0, 0, 0)
 
         # GRAVITY FORCE
-        f_grav = vec(0,0,-g(self.pos.z, self.mass))
+        f_grav = g(self.pos, self.mass)
 
         # THRUST VECTOR
         f_thrust = vec(0, 0, 0)
@@ -702,25 +702,22 @@ def cd_atlas(M: float):
 
 
 AlphaPhoenixFins = dict(num_fins=4, center=vec(0,-0.152,0), pos=vec(0,-0.162,0), planform=0.005, stall_angle=10*pi/180, ac_span=0.05, cl_pass=cl)
-# fin_1 = FinSet(**AlphaPhoenixFins)
 
 FAR_wind = dict(name="FAR", mu=2, sigma=2, angle_mu=pi/4, angle_sigma=pi/8, step=100, print_debug=False)
 wind_1 = WindProfile(**FAR_wind)
 
 # Alpha Phoenix on I-300
-AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=cd_atlas, A=(2.4/2/39.4)**2*np.pi, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(8/39.4/2)**2*np.pi, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I435, t0=0, wind=wind_1, initDebug=True, fin=fin_1)
+AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715, pmi=0.0715, rmi=0.0012, cp=vec(0,-0.152,0), cd=cd_atlas, A=(2.4/2/39.4)**2*np.pi, cd_s=1.5, A_s = 0.05, main_deploy_alt=150, chute_cd=0.8, chute_A=(32/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(8/39.4/2)**2*np.pi, cg=vec(0,-0.142,0), dry_mass=1.1, fuel_mass=0.220, thrust=I435, t0=0, wind=wind_1, initDebug=True, fin=FinSet(**AlphaPhoenixFins))
 
 # Theseus on LR-101
 TheseusFins = dict(num_fins=4, center=vec(0,0,-5), pos=vec(0,0,-5.2), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
-#fin_theseus = FinSet(**TheseusFins)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, cg=vec(0,-4.5+8/39.37,0), dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=fin_theseus)
+Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, cg=vec(0,-4.5+8/39.37,0), dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins))
 
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
-fin_sharkshot = FinSet(**SharkShotFins)
 
-SharkShot = dict(name="SharkShot", pos=vec(0,0,1), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=302899/2.2/39.37**2, pmi=302899/2.2/39.37**2, rmi=304/2.2/39.37**2, cp=vec(0,0,-141/39.37), cd=cd_atlas, A=(16/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,0,-140/39.37), dry_mass=(189.651)/2.204, fuel_mass=444.026/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=fin_sharkshot)
+SharkShot = dict(name="SharkShot", pos=vec(0,0,1), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=302899/2.2/39.37**2, pmi=302899/2.2/39.37**2, rmi=304/2.2/39.37**2, cp=vec(0,0,-141/39.37), cd=cd_atlas, A=(16/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,0,-140/39.37), dry_mass=(189.651)/2.204, fuel_mass=444.026/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=FinSet(**SharkShotFins))
 
 
 
