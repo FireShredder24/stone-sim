@@ -122,28 +122,33 @@ class WindProfile:
             print(f"angle set: {self.angleSet}")
         # end constructor
 
-    def wind(self, altitude):
-        index = (altitude + 50) / self.step  # normalize to band number
+    def wind(self, pos: vector):
+        alt = altitude(pos)
+        index = (alt + 50) / self.step  # normalize to band number
         band_pos = index - floor(index)  # relative position within altitude band
         index = abs(int(index))  # convert to positive whole number for table index
         if index >= len(self.angleSet) - 1:
             return vec(0,0,0);
-        angle = self.angleSet[index]  # grab angle from wind band
+        azimuth = self.angleSet[index]  # grab angle from wind band
         speed = self.speedSet[index]  # grab speed from wind band
         if band_pos <= 0.2:  # if in the lower 20% of wind band, interpolate to the avg. b/w current and previous bands
-            angle_1 = self.angleSet[index - 1]  # angle from previous wind band
+            azimuth_1 = self.angleSet[index - 1]  # angle from previous wind band
             speed_1 = self.speedSet[index - 1]  # speed from previous wind band
             # avg. of 2 wind bands (y-intercept) + difference b/w current band and avg. point (slope) * rel. pos (x)
-            angle = (angle_1 + angle) / 2 + (angle - (angle_1 + angle) / 2) * band_pos / 0.2
+            azimuth = (azimuth_1 + azimuth) / 2 + (azimuth - (azimuth_1 + azimuth) / 2) * band_pos / 0.2
             speed = (speed + speed_1) / 2 + (speed - (speed_1 + speed) / 2) * band_pos / 0.2
         if band_pos >= 0.8:  # if in the upper 20% of wind band, interpolate to the avg. b/w current and next bands
-            angle_1 = self.angleSet[index + 1]  # angle from next wind band
+            azimuth_1 = self.angleSet[index + 1]  # angle from next wind band
             speed_1 = self.speedSet[index + 1]  # speed from next wind band
             # current wind band (y-intercept) + difference b/w current band and avg. point (slope) * rel. pos (x)
-            angle = angle - (angle - (angle_1 + angle) / 2) * (band_pos - 0.8) / 0.2
+            azimuth = azimuth - (azimuth - (azimuth_1 + azimuth) / 2) * (band_pos - 0.8) / 0.2
             speed = speed - (speed - (speed_1 + speed) / 2) * (band_pos - 0.8) / 0.2
 
-        return yp_unit(angle, 0) * speed  # unit vector of angle, times speed
+        local_z = hat(pos-cg_E) # local up direction
+        local_x = cross(vec(0,cg_E.mag,0),local_z).hat # local east vector
+        local_y = cross(local_z,local_x).hat # local north vector
+
+        return speed * rotate(local_y,-azimuth,local_z) # Rotates the north vector clockwise around the up vector by the azimuth angle
 
 # Fin set class declaration
 # Determines lift properties of fins only.  Drag is handled by the overall rocket cd, A, cd_s, and A_s
@@ -479,7 +484,7 @@ class FreeRocket:
 
         # BODY DRAG
         heading = self.roll_axis  # 3d linear unit vector of vehicle orientation
-        airflow = self.v + self.wind.wind(self.pos.z)  # 3d linear vector of oncoming airstream (reversed)
+        airflow = self.v + self.wind.wind(self.pos)  # 3d linear vector of oncoming airstream (reversed)
         alpha = math.acos(heading.dot(airflow.hat))  # rad, angle of attack
         cd = self.cd(self.v.mag / c(self.pos))  # drag coefficient
         A = self.A_alpha(alpha)  # m^2, reference area
@@ -492,7 +497,7 @@ class FreeRocket:
 
         # DROGUE PARACHUTE DRAG
         if self.drogue:
-            f_drogue = self.v.mag ** 2 * rho(self.pos) * self.drogue_cd * self.drogue_A / 2 * -airflow.hat
+            f_drogue = self.airflow.mag ** 2 * rho(self.pos) * self.drogue_cd * self.drogue_A / 2 * -airflow.hat
         else:
             f_drogue = vec(0, 0, 0)
 
@@ -500,7 +505,7 @@ class FreeRocket:
         if self.main_chute:
             opening_time = 3
             ramp = min(t - self.main_time,opening_time) / opening_time # Ramps parachute opening area over time
-            f_chute = self.v.mag ** 2 * rho(self.pos) * self.chute_cd * self.chute_A * ramp / 2 * -airflow.hat
+            f_chute = self.airflow.mag ** 2 * rho(self.pos) * self.chute_cd * self.chute_A * ramp / 2 * -airflow.hat
         else:
             f_chute = vec(0, 0, 0)
 
@@ -547,7 +552,7 @@ class FreeRocket:
             self.main_time = t
             print(f"{self.name} Main chute deployment at T+{d2(t)}s at Altitude:{d2(altitude(self.pos)*39.4/12)}ft & Speed:{d2(self.v.mag*39.4/12)}ft/s")
 
-        mach_n = mag(self.v + self.wind.wind(self.pos.z)) / c(self.pos)
+        mach_n = airflow.mag / c(self.pos)
         # Graph switched variables
         if FreeRocket.heading_enable:
             self.heading_x.plot(t,self.roll_axis.x)
