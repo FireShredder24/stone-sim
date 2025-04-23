@@ -21,7 +21,7 @@ Usage:
 
 Abstract:
 
-	This simulator does not attempt to approximate aerodynamic properties of rockets, only their actual flight characteristics.  This is not intended to be a replacement for OpenRocket or any other full-featured rocket building simulator, only a tool for preliminary analysis.  The simulation technically possesses 6 degrees of freedom, but rolling motion and fin lift calculations are very, very unreliable.
+	This simulator does not attempt to approximate aerodynamic properties of rockets, only their actual flight characteristics.  This is not intended to be a replacement for OpenRocket or any other full-featured rocket building simulator, only a tool for preliminary analysis.  The simulation possesses 6 degrees of freedom (3-axis translation and 3-axis rotation). 
 
 	As such, you, the user, must supply each property of the vehicle (dry mass, fuel mass, drag coefficient, frontal area, etc.).  There is no attempt to derive any of these values from physical realities, such as the size and density of various structural components or propellants.
 
@@ -34,11 +34,7 @@ Planned features:
 	Built-in liquid blowdown thrust curve simulation
 		This will a re-implementation of the Matlab/Octave script "blowdown.m" into the main Python program
 	
-	Proper quaternion support in place of current buggy Euler rotations
-
-	Proper spherical Earth and Coriolis forces representation
-
-Copyright © 2024 John Nguyen
+Copyright © 2025 John Nguyen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
