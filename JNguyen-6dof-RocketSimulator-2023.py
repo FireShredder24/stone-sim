@@ -266,10 +266,10 @@ class ReactionControlSystem:
 
     # Retrieve the current total thrust vector exerted by RCS.
     def getThrust(self):
-        error = diff_angle(self.setpoint,self.pose)
-        err_axis = hat(cross(self.setpoint,self.pose))
-        if error > self.min_err:
-            
+        theta_err = diff_angle(self.setpoint,self.pose) * hat(cross(self.pose,self.setpoint)
+        if theta_err.mag > self.min_err:
+            omega_d = min(max_alpha*theta_err.mag,max_alpha)*theta_err.hat
+            alpha = (omega_d - self.omega) / dt
             return thrust
         else:
             return vec(0,0,0)
