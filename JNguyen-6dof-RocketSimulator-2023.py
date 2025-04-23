@@ -229,17 +229,15 @@ class ReactionControlSystem:
     cg = vec(0,0,0)
     thrust = 0
     throttle = False
-    # Set initial setpoint and pose to upwards by default
-    setpoint = vec(0,0,1)
-    pose = vec(0,0,1)
-    omega = vec(0,0,0)
 
     # Constructs fundamental characteristics
-    def ReactionControlSystem(self, fuel_mass: float, cg: vector, ct: vector, thrust: float, throttle: bool):
-        self.fuel_mass = fuel_mass
-        self.cg = cg # Center of mass
-        self.ct = ct # Center of thrust
-        self.thrust = thrust # Max thrust per thruster
+    def __init__(self, fuel_mass: float, cg: vector, ct: vector, rcg: vector, radius: float, thrust: float, throttle: bool):
+        self.fuel_mass = fuel_mass # kg, fuel mass
+        self.cg = cg # vec, m, Center of mass
+        self.ct = ct # vec, m, Center of thrust
+        self.rcg = rcg # vec, m, Rocket center of mass
+        self.thrust = thrust # N, Max thrust per thruster
+        self.radius = radius # m, roll thruster radius from center
         self.throttle = throttle # If true, can proportionally throttle thrusters
 
     # Initialize or update the angular rate PID controller.
@@ -256,20 +254,52 @@ class ReactionControlSystem:
         self.min_err = min_err # minimum angular error to apply guidance
 
     # Set the guidance heading request.
-    def setReference(self, setpoint: vector):
-        self.setpoint = setpoint.hat
+    def setReference(self, roll_setpoint: vector, yaw_setpoint: vector):
+        self.roll_setpoint = roll_setpoint.hat # Desired roll axis
+        self.yaw_setpoint = yaw_setpoint.hat # Desired yaw axis
 
     # Update the current rocket pose.
-    def setPose(self, pose: vector, omega: vector):
-        self.pose = pose.hat
-        self.omega = omega
+    def setPose(self, roll: vector, pitch: vector, yaw: vector, omega:vector):
+        self.roll = roll.hat # vector, rocket roll axis 
+        self.pitch = pitch.hat # unit vector, rocket pitch axis
+        self.yaw = yaw.hat # unit vector, rocket yaw axis
+        self.omega = omega # vector, rad/s, rocket angular velocity
+    
+    # Update the moments of inertia of the entire rocket
+    def setI(self, I_O: vector):
+        self.I_O = I_O # kg m^2, mass moments of inertia about x, y, z axes
+
+    def setRCg(self, rcg: vector):
+        self.rcg = rcg # vec, m, center of mass of rocket in local coords
 
     # Retrieve the current total thrust vector exerted by RCS.
     def getThrust(self):
-        theta_err = diff_angle(self.setpoint,self.pose) * hat(cross(self.pose,self.setpoint)
+        theta_err = diff_angle(self.roll_setpoint,self.roll) * hat(cross(self.roll,self.roll_setpoint))
         if theta_err.mag > self.min_err:
-            omega_d = min(max_alpha*theta_err.mag,max_alpha)*theta_err.hat
-            alpha = (omega_d - self.omega) / dt
+            # Desired angular velocity to reach the correct nose angle
+            omega_d = min(self.max_alpha*theta_err.mag,self.max_alpha)*theta_err.hat
+            # Angular acceleration to achieve desired angular velocity in 1 second
+            alpha = (omega_d - self.omega) / 1
+            # Transform alpha into local coordinates
+            alpha_local = vec(alpha.dot(self.pitch),alpha.dot(self.yaw),alpha.dot(self.roll))
+            # Calculate required moment about each axis to achieve alpha_local
+            moment = vec(alpha.x / self.I_O.x, alpha.y / self.I_O.y, alpha.z / self.I_O.z)
+            # Calculate thrust for pitch acceleration
+            pitch_radius = (self.cg - self.rcg).z
+            thrust_pitch = -moment.x / pitch_radius * self.yaw
+            if thrust_pitch.mag > self.thrust*2.5:
+                thrust_pitch = self.thrust*2.5*thrust_pitch.hat
+            # Calculate thrust for yaw acceleration
+            yaw_radius = (self.cg - self.rcg).z
+            thrust_yaw = moment.y / yaw_radius * self.pitch
+            if thrust_yaw.mag > self.thrust*2.5:
+                thrust_yaw = self.thrust*2.5*thrust_yaw.hat
+            # Calculate thrust for roll acceleration
+            thrust_roll = moment.z / self.radius * self.yaw
+            if thrust_roll.mag > self.thrust*4:
+                thrust_roll = self.thrust*4*thrust_roll.hat
+            # Blend total thrust vectors together
+            thrust = thrust_pitch + thrust_yaw + thrust_roll
             return thrust
         else:
             return vec(0,0,0)
@@ -293,6 +323,7 @@ class FreeRocket:
     force_graph_enable = False
     mass_graph_enable = False
     fin_aoa_graph_enable = False
+    rcs_graph_enable = True
 
     fast_graphing = True
 
@@ -311,7 +342,7 @@ class FreeRocket:
 
     # constructor
     def __init__(self, name: str, pos: vector, yaw: float, pitch: float, roll: float, v_0: float, ymi: float, pmi: float, rmi: float, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float,
-                 drogue_cd: float, drogue_A: float, cg: vector, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet):
+                 drogue_cd: float, drogue_A: float, cg: vector, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet, rcs: ReactionControlSystem):
         self.name = name
         # FUNDAMENTAL VECTORS
         self.pos = pos  # m, 3D cartesian position
@@ -343,9 +374,10 @@ class FreeRocket:
         self.dry_mass = dry_mass  # kg
         self.fuel_mass = fuel_mass  # kg
         self.mass = self.dry_mass + self.fuel_mass  # kg, total initial mass
-        # PROPULSION PROPERTIES
-        self.thrust = thrust  # thrust function of time
 
+        # PROPULSION PROPERTIES
+
+        self.thrust = thrust  # thrust function of time
         t = 0  # s, thrust time variable
         dt = 0.01  # s, thrust time step
         self.J = 0  # total impulse
@@ -366,6 +398,12 @@ class FreeRocket:
             self.I_0.z * self.drot.z
         )
 
+        # GUIDANCE SYSTEM
+        self.rcs = rcs
+        self.rcs.setRCg(self.cg)
+        self.rcs.setI(self.I_0)
+        self.rcs.setPose(self.roll_axis,self.pitch_axis,self.yaw_axis,self.drot)
+
         # State variables for drogue and main parachute deployment, NOT deployment toggles.
         self.drogue = False
         self.main_chute = False
@@ -378,6 +416,12 @@ class FreeRocket:
             print(f"{self.name} total impulse: {d2(self.J)}Ns")
 
         # Graph object declaration
+
+        if FreeRocket.rcs_graph_enable:
+            self.rcs_graph = graph(title=f"RCS Thrust of {self.name}",xtitle="Time (s)",ytitle="Thrust (N)",fast=FreeRocket.fast_graphing)
+            self.rcs_x = gcurve(graph=self.rcs_graph,color=color.red,label="x")
+            self.rcs_y = gcurve(graph=self.rcs_graph,color=color.green,label="y")
+            self.rcs_z = gcurve(graph=self.rcs_graph,color=color.blue,label="z")
 
         if FreeRocket.heading_enable:
             self.heading_graph = graph(title=f"Roll-axis Vector of {self.name}",xtitle="Time (s)",ytitle="Component",fast=FreeRocket.fast_graphing)
@@ -517,11 +561,15 @@ class FreeRocket:
         if self.t0 <= t <= self.t1:
             f_thrust = self.thrust(t - self.t0) * self.roll_axis
 
+        # REACTION CONTROL SYSTEM
+        # This method doesnt update the RCS system so you can apply the updates to the guidance inputs at any desired frequency
+        f_rcs = self.rcs.getThrust()
+
         # TOTAL NET FORCE
-        f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue
+        f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs
 
         # TOTAL NET MOMENT
-        M_net = M_drag
+        M_net = M_drag + cross(self.rcs.cg - self.cg, f_rcs)
 
         self.p = self.p + f_net * dt  # incrementing linear momentum
         self.v = self.p / self.mass  # calculating velocity
@@ -601,6 +649,10 @@ class FreeRocket:
             self.mass_plot.plot(t, self.mass * 2.204)
         if FreeRocket.fin_aoa_graph_enable:
             self.fin.aoa_plot(t, self.rot, airflow, self.cg)
+        if FreeRocket.rcs_graph_enable:
+            self.rcs_x.plot(t,f_rcs.dot(self.yaw_axis))
+            self.rcs_y.plot(t,f_rcs.dot(self.pitch_axis))
+            self.rcs_z.plot(t,f_rcs.dot(self.pitch_axis))
 
         # Update flight report variables
         self.duration = t
@@ -730,14 +782,20 @@ Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 
-SharkShot = dict(name="SharkShot", pos=vec(0,0,1), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=302899/2.2/39.37**2, pmi=302899/2.2/39.37**2, rmi=304/2.2/39.37**2, cp=vec(0,0,-141/39.37), cd=cd_atlas, A=(16/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,0,-140/39.37), dry_mass=(189.651)/2.204, fuel_mass=444.026/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=FinSet(**SharkShotFins))
+SharkShotRCS = dict(fuel_mass=5, cg=vec(0,0,-50/39.4), ct=vec(0,0,-50/39.4), rcg=(0,0,-140/39.37), radius=5/39.4, thrust=5, throttle=False)
+
+SharkShot = dict(name="SharkShot", pos=vec(0,0,1), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=302899/2.2/39.37**2, pmi=302899/2.2/39.37**2, rmi=304/2.2/39.37**2, cp=vec(0,0,-141/39.37), cd=cd_atlas, A=(16/2/39.4)**2*np.pi, cd_s=1, A_s=2, main_deploy_alt=500, chute_cd=1, chute_A=(300/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=0.5, cg=vec(0,0,-140/39.37), dry_mass=(189.651)/2.204, fuel_mass=444.026/2.204, thrust=Hammerhead, t0=0, wind=wind_1, initDebug=True, fin=FinSet(**SharkShotFins), rcs=ReactionControlSystem(**SharkShotRCS))
 
 
 
 
 # Beginning of actual program execution
 
+# Defining vehicles and their properties
 booster = FreeRocket(**SharkShot)
+booster.rcs.setReference(vec(0,0,1),vec(0,1,0))
+booster.rcs.setPID(1,0,0,0)
+booster.rcs.setProfile(1,1,np.pi/180)
 
 time = 0
 dtime = 1 / 50
@@ -751,13 +809,15 @@ while booster.pos.z < 21:
     booster.v.x = 0
     booster.roll_axis = vec(0,0,1)
     booster.L = vec(0,0,0)
+    booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     time += dtime
 
-dtime = 1 / 400
+dtime = 1 / 200
 print(f"Rocket cleared launch rail at {booster.v.z * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
 while not booster.drogue:
     booster.simulate(time, dtime)
+    booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     time += dtime
 print("-----END SIMULATION-----\n")
 
