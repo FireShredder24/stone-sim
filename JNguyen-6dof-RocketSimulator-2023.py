@@ -239,6 +239,8 @@ class ReactionControlSystem:
         self.thrust = thrust # N, Max thrust per thruster
         self.radius = radius # m, roll thruster radius from center
         self.throttle = throttle # If true, can proportionally throttle thrusters
+        self.omega_acc = vec(0,0,0)
+        self.last_omega_err = vec(0,0,0)
 
     # Initialize or update the angular rate PID controller.
     def setPID(self, kp: float, ki: float, kd: float, izone: float):
@@ -278,8 +280,17 @@ class ReactionControlSystem:
         if theta_err.mag > self.min_err:
             # Desired angular velocity to reach the correct nose angle
             omega_d = min(self.max_alpha*theta_err.mag,self.max_alpha)*theta_err.hat
-            # Angular acceleration to achieve desired angular velocity in 1 second
-            alpha = (omega_d - self.omega) / 1
+            # Angular velocity error
+            omega_err = omega_d - self.omega
+            # Angular velocity error integral 
+            self.omega_acc.x = max(min(omega_err.x + self.omega_acc.x, self.izone), -self.izone)
+            self.omega_acc.y = max(min(omega_err.y + self.omega_acc.y, self.izone),-self.izone)
+            self.omega_acc.z = max(min(omega_err.z + self.omega_acc.z, self.izone),-self.izone)
+            # Angular velocity error derivative
+            d_omega_err = (omega_err - self.last_omega_err)
+            self.last_omega_err = omega_err
+            # Angular acceleration from velocity PID 
+            alpha = omega_err * self.kp + self.omega_acc * self.ki + d_omega_err * self.kd
             # Transform alpha into local coordinates
             alpha_local = vec(alpha.dot(self.pitch),alpha.dot(self.yaw),alpha.dot(self.roll))
             # Calculate required moment about each axis to achieve alpha_local
@@ -295,14 +306,14 @@ class ReactionControlSystem:
             if thrust_yaw.mag > self.thrust*2.5:
                 thrust_yaw = self.thrust*2.5*thrust_yaw.hat
             # Calculate thrust for roll acceleration
-            thrust_roll = moment.z / self.radius * self.yaw
-            if thrust_roll.mag > self.thrust*4:
-                thrust_roll = self.thrust*4*thrust_roll.hat
-            # Blend total thrust vectors together
-            thrust = thrust_pitch + thrust_yaw + thrust_roll
-            return thrust
+            thrust_roll = moment.z / self.radius 
+            if thrust_roll > self.thrust*4:
+                thrust_roll = self.thrust*4
+            # Blend yaw and pitch thrust vectors together
+            thrust = thrust_pitch + thrust_yaw
+            return {'thrust':thrust, 'thrust_roll':thrust_roll}
         else:
-            return vec(0,0,0)
+            return {'thrust':vec(0,0,0),'thrust_roll':0}
         
 
 
@@ -316,16 +327,17 @@ class FreeRocket:
     velocity_graph_enable = True  
     rotation_rate_graph_enable = True  
     acceleration_graph_enable = False  
-    moment_graph_enable = False  
+    moment_graph_enable = True  
     side_profile_enable = False
     top_profile_enable = False
     aoa_graph_enable = False  
-    force_graph_enable = False
+    force_graph_enable = True
     mass_graph_enable = False
     fin_aoa_graph_enable = False
     rcs_graph_enable = True
 
-    fast_graphing = True
+    fast_graphing = False
+    graph_enable = True
 
 
     # Rocket centric coordinate system definition:
@@ -563,13 +575,20 @@ class FreeRocket:
 
         # REACTION CONTROL SYSTEM
         # This method doesnt update the RCS system so you can apply the updates to the guidance inputs at any desired frequency
-        f_rcs = self.rcs.getThrust()
+        rcs_out = self.rcs.getThrust()
+        f_rcs = rcs_out['thrust']
+        f_rcs_roll = rcs_out['thrust_roll']
+
+        # Moment due to yaw & pitch thrusters
+        M_rcs = cross(self.rcs.cg - self.cg, f_rcs)
+        # Moment due to roll thrusters
+        M_rcs_roll = self.rcs.radius * f_rcs_roll * self.roll_axis
 
         # TOTAL NET FORCE
         f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs
 
         # TOTAL NET MOMENT
-        M_net = M_drag + cross(self.rcs.cg - self.cg, f_rcs)
+        M_net = M_drag + M_rcs + M_rcs_roll
 
         self.p = self.p + f_net * dt  # incrementing linear momentum
         self.v = self.p / self.mass  # calculating velocity
@@ -577,11 +596,16 @@ class FreeRocket:
 
         self.L += M_net * dt  # incrementing angular momentum
         L_local = vec(self.L.dot(self.pitch_axis),self.L.dot(self.yaw_axis),self.L.dot(self.roll_axis)) # Transforming angular momentum into local coordinate system
+        # Angular velocity in local coordinates
         self.drot = vec(L_local.x / self.I_0.x, L_local.y / self.I_0.y, L_local.z / self.I_0.z)  # calculating rotation rate using 3-axis moments of inertia
-        self.roll_axis = rotate(self.roll_axis,self.drot.mag,self.drot) # rotating base vectors
-        self.pitch_axis = rotate(self.pitch_axis,self.drot.mag,self.drot)
-        self.yaw_axis = rotate(self.yaw_axis,self.drot.mag,self.drot)
-        self.rot = vec(atan2(self.roll_axis.z,self.roll_axis.y),atan2(self.roll_axis.z,self.roll_axis.x),0) # updating azimuth/elevation
+        # Angular velocity transformed to global coordinates
+        self.drot = self.drot.x * self.pitch_axis + self.drot.y*self.yaw_axis + self.drot.z*self.roll_axis 
+        # Rotating local coordinate base vectors
+        self.roll_axis = rotate(self.roll_axis,self.drot.mag*dt,self.drot) 
+        self.pitch_axis = rotate(self.pitch_axis,self.drot.mag*dt,self.drot)
+        self.yaw_axis = rotate(self.yaw_axis,self.drot.mag*dt,self.drot)
+        # update azimuth/elevation
+        self.rot = vec(atan2(self.roll_axis.z,self.roll_axis.y),atan2(self.roll_axis.z,self.roll_axis.x),0) 
 
         # End of movement during this iteration
 
@@ -602,57 +626,58 @@ class FreeRocket:
 
         mach_n = airflow.mag / c(self.pos)
         # Graph switched variables
-        if FreeRocket.heading_enable:
-            self.heading_x.plot(t,self.roll_axis.x)
-            self.heading_y.plot(t,self.roll_axis.y)
-            self.heading_z.plot(t,self.roll_axis.z)
-        if FreeRocket.side_profile_enable:
-            self.flight_side.plot(sqrt((self.pos.x*39.4/12)**2 + (self.pos.y*39.4/12)**2), self.pos.z*39.4/12)
-        if FreeRocket.top_profile_enable:
-            self.flight_top.plot(self.pos.x*39.4/12, self.pos.y*39.4/12)
-        if FreeRocket.moment_graph_enable:
-            self.moment_yaw.plot(t, M_net.x*39.4/12/4.448)
-            self.moment_pitch.plot(t, M_net.y*39.4/12/4.448)
-            self.moment_roll.plot(t, M_net.z*39.4/12/4.448)
-            self.moment_total.plot(t, M_net.mag*39.4/12/4.448)
-        if FreeRocket.velocity_graph_enable:
-            self.velocity_x.plot(t, self.v.x*39.4/12)
-            self.velocity_y.plot(t, self.v.y*39.4/12)
-            self.velocity_z.plot(t, self.v.z*39.4/12)
-            self.velocity_total.plot(t, self.v.mag*39.4/12)
-        if FreeRocket.position_graph_enable:
-            self.position_x.plot(t, self.pos.x*39.4/12)
-            self.position_y.plot(t, self.pos.y*39.4/12)
-            self.position_z.plot(t, self.pos.z*39.4/12)
-            self.position_total.plot(t, sqrt((self.pos.x*39.4/12)**2 + (self.pos.y*39.4/12)**2))
-        if FreeRocket.rotation_graph_enable:
-            self.rotation_yaw.plot(t, self.rot.x*180/np.pi)
-            self.rotation_pitch.plot(t, self.rot.y*180/np.pi)
-            self.rotation_roll.plot(t, self.rot.z*180/np.pi)
-        if FreeRocket.acceleration_graph_enable:
-            self.acceleration_x.plot(t, f_net.x / self.mass * 39.4/12 / 32.174)
-            self.acceleration_y.plot(t, f_net.y / self.mass * 39.4/12 / 32.174)
-            self.acceleration_z.plot(t, f_net.z / self.mass * 39.4/12 / 32.174)
-            self.acceleration_total.plot(t, f_net.mag / self.mass * 39.4/12 / 32.174)
-            self.acceleration_g.plot(t, f_grav.mag / self.mass * 39.4/12 / 32.174)
-        if FreeRocket.rotation_rate_graph_enable:
-            self.rotation_rate_yaw.plot(t, self.drot.x * 180/np.pi)
-            self.rotation_rate_pitch.plot(t, self.drot.y * 180/np.pi)
-            self.rotation_rate_roll.plot(t, self.drot.z * 180/np.pi)
-        if FreeRocket.aoa_graph_enable:
-            self.aoa.plot(t, alpha/np.pi*180)
-        if FreeRocket.force_graph_enable:
-            self.drag_plot.plot(t, f_drag.mag / 4.448)
-            self.thrust_plot.plot(t, f_thrust.mag / 4.448)
-            self.gravity_plot.plot(t, f_grav.mag / 4.448)
-        if FreeRocket.mass_graph_enable:
-            self.mass_plot.plot(t, self.mass * 2.204)
-        if FreeRocket.fin_aoa_graph_enable:
-            self.fin.aoa_plot(t, self.rot, airflow, self.cg)
-        if FreeRocket.rcs_graph_enable:
-            self.rcs_x.plot(t,f_rcs.dot(self.yaw_axis))
-            self.rcs_y.plot(t,f_rcs.dot(self.pitch_axis))
-            self.rcs_z.plot(t,f_rcs.dot(self.pitch_axis))
+        if self.graph_enable:
+            if FreeRocket.heading_enable:
+                self.heading_x.plot(t,self.roll_axis.x)
+                self.heading_y.plot(t,self.roll_axis.y)
+                self.heading_z.plot(t,self.roll_axis.z)
+            if FreeRocket.side_profile_enable:
+                self.flight_side.plot(sqrt((self.pos.x*39.4/12)**2 + (self.pos.y*39.4/12)**2), self.pos.z*39.4/12)
+            if FreeRocket.top_profile_enable:
+                self.flight_top.plot(self.pos.x*39.4/12, self.pos.y*39.4/12)
+            if FreeRocket.moment_graph_enable:
+                self.moment_yaw.plot(t, M_net.x*39.4/12/4.448)
+                self.moment_pitch.plot(t, M_net.y*39.4/12/4.448)
+                self.moment_roll.plot(t, M_net.z*39.4/12/4.448)
+                self.moment_total.plot(t, M_net.mag*39.4/12/4.448)
+            if FreeRocket.velocity_graph_enable:
+                self.velocity_x.plot(t, self.v.x*39.4/12)
+                self.velocity_y.plot(t, self.v.y*39.4/12)
+                self.velocity_z.plot(t, self.v.z*39.4/12)
+                self.velocity_total.plot(t, self.v.mag*39.4/12)
+            if FreeRocket.position_graph_enable:
+                self.position_x.plot(t, self.pos.x*39.4/12)
+                self.position_y.plot(t, self.pos.y*39.4/12)
+                self.position_z.plot(t, self.pos.z*39.4/12)
+                self.position_total.plot(t, sqrt((self.pos.x*39.4/12)**2 + (self.pos.y*39.4/12)**2))
+            if FreeRocket.rotation_graph_enable:
+                self.rotation_yaw.plot(t, self.rot.x*180/np.pi)
+                self.rotation_pitch.plot(t, self.rot.y*180/np.pi)
+                self.rotation_roll.plot(t, self.rot.z*180/np.pi)
+            if FreeRocket.acceleration_graph_enable:
+                self.acceleration_x.plot(t, f_net.x / self.mass * 39.4/12 / 32.174)
+                self.acceleration_y.plot(t, f_net.y / self.mass * 39.4/12 / 32.174)
+                self.acceleration_z.plot(t, f_net.z / self.mass * 39.4/12 / 32.174)
+                self.acceleration_total.plot(t, f_net.mag / self.mass * 39.4/12 / 32.174)
+                self.acceleration_g.plot(t, f_grav.mag / self.mass * 39.4/12 / 32.174)
+            if FreeRocket.rotation_rate_graph_enable:
+                self.rotation_rate_yaw.plot(t, self.drot.dot(self.yaw_axis) * 180/np.pi)
+                self.rotation_rate_pitch.plot(t, self.drot.dot(self.pitch_axis) * 180/np.pi)
+                self.rotation_rate_roll.plot(t, self.drot.dot(self.roll_axis) * 180/np.pi)
+            if FreeRocket.aoa_graph_enable:
+                self.aoa.plot(t, alpha/np.pi*180)
+            if FreeRocket.force_graph_enable:
+                self.drag_plot.plot(t, f_drag.mag / 4.448)
+                self.thrust_plot.plot(t, f_thrust.mag / 4.448)
+                self.gravity_plot.plot(t, f_grav.mag / 4.448)
+            if FreeRocket.mass_graph_enable:
+                self.mass_plot.plot(t, self.mass * 2.204)
+            if FreeRocket.fin_aoa_graph_enable:
+                self.fin.aoa_plot(t, self.rot, airflow, self.cg)
+            if FreeRocket.rcs_graph_enable:
+                self.rcs_x.plot(t,f_rcs.dot(self.yaw_axis))
+                self.rcs_y.plot(t,f_rcs.dot(self.pitch_axis))
+                self.rcs_z.plot(t,f_rcs.dot(self.pitch_axis))
 
         # Update flight report variables
         self.duration = t
@@ -794,11 +819,29 @@ SharkShot = dict(name="SharkShot", pos=vec(0,0,1), yaw=0, pitch=90*pi/180, roll=
 # Defining vehicles and their properties
 booster = FreeRocket(**SharkShot)
 booster.rcs.setReference(vec(0,0,1),vec(0,1,0))
-booster.rcs.setPID(1,0,0,0)
+booster.rcs.setPID(3,0,0.05,0)
 booster.rcs.setProfile(1,1,np.pi/180)
+
+paused = False
+
+def pause():
+    global paused
+    paused = not paused
+
+pause = button(bind=pause,text="Pause")
 
 time = 0
 dtime = 1 / 50
+
+def timestep():
+    global dtime
+    old = dtime
+    dtime = float(input("Time step (s): "))
+    if dtime == None:
+        dtime = old
+
+dtimebutton = button(bind=timestep,text="Change dt")
+
 
 print(f"Time step: {dtime:.3f}")
 print("----BEGIN SIMULATION----")
@@ -811,14 +854,25 @@ while booster.pos.z < 21:
     booster.L = vec(0,0,0)
     booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     time += dtime
+    while paused:
+        sleep(1)
+
 
 dtime = 1 / 200
 print(f"Rocket cleared launch rail at {booster.v.z * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
+i = 1
 while not booster.drogue:
     booster.simulate(time, dtime)
     booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     time += dtime
+    i += 1
+    if i % 20 == 0:
+        booster.graph_enable = True
+    else:
+        booster.graph_enable = False
+    while paused:
+        sleep(1)
 print("-----END SIMULATION-----\n")
 
 booster.flight_report()
