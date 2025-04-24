@@ -280,8 +280,8 @@ class ReactionControlSystem:
         print(f"error angle: {theta_err}")
         if theta_err.mag > self.min_err:
             # Desired angular velocity to reach the correct nose angle
-            omega_d = 2*theta_err
-            # Angular velocity error
+            omega_d = theta_err
+            # Position error
             omega_err = omega_d - self.omega
             print(f"omega_err: {omega_err}")
             # Angular velocity error integral 
@@ -301,12 +301,12 @@ class ReactionControlSystem:
             moment = vec(alpha.x * self.I_O.x, alpha.y * self.I_O.y, alpha.z * self.I_O.z)
             print(f"moment: {moment}")
             # Calculate thrust for pitch acceleration
-            pitch_radius = (self.cg - self.rcg).z
+            pitch_radius = (self.ct - self.rcg).z
             thrust_pitch = -moment.x / pitch_radius * self.yaw
             if thrust_pitch.mag > self.thrust*2:
                 thrust_pitch = self.thrust*2 * thrust_pitch.hat
             # Calculate thrust for yaw acceleration
-            yaw_radius = (self.cg - self.rcg).z
+            yaw_radius = (self.ct - self.rcg).z
             print(f"yaw_radius: {yaw_radius}, pitch: {self.pitch}")
             thrust_yaw = moment.y / yaw_radius * self.pitch
             if thrust_yaw.mag > self.thrust*2:
@@ -407,8 +407,8 @@ class FreeRocket:
         # MOMENTUM PROPERTIES
         self.p = self.v * self.mass  # kgm/s, Translational momentum
         self.v = self.p / self.mass  # m/s, Translational velocity
-        self.drot = vec(0, 0, 0)  # rad/s, yaw/pitch/roll rate
-        self.L = vec(  # Angular momentum, yaw/pitch/roll
+        self.drot = vec(0, 0, 0)  # rad/s, pitch/yaw/roll rate
+        self.L = vec(  # Angular momentum, pitch/yaw/roll
             self.I_0.x * self.drot.x,
             self.I_0.y * self.drot.y,
             self.I_0.z * self.drot.z
@@ -579,7 +579,7 @@ class FreeRocket:
         f_rcs_roll = rcs_out['thrust_roll']
 
         # Moment due to yaw & pitch thrusters
-        M_rcs = cross(self.rcs.cg - self.cg, f_rcs)
+        M_rcs = cross(self.roll_axis*(self.rcs.ct - self.cg).mag, f_rcs)
         # Moment due to roll thrusters
         M_rcs_roll = self.rcs.radius * f_rcs_roll * self.roll_axis
 
@@ -808,7 +808,7 @@ SharkShotRCS = dict(fuel_mass=5, cg=vec(0,0,-50/39.4), ct=vec(0,0,-50/39.4), rcg
 SharkShot = dict(name="SharkShot", pos=vec(0,0,1), roll_axis=vec(0,0,1), yaw_axis=vec(0,1,0), v=vec(0,0,5),I_0=vec(5.63e6/2.2/39.37**2,5.63e6/2.2/39.37**2,5.6e4/2.2/39.37**2),cg=vec(0,0,-181.3),cp=vec(0,0,-240),cd=cd_atlas, A=(12/2/39.4)**2*np.pi,cd_s=1,A_s=2,main_deploy_alt=500,chute_cd=0.8,chute_A=(300/39.4/2)**2*np.pi,drogue_cd=0.8,drogue_A=0.5,dry_mass=288.6/2.204,fuel_mass=400/2.204,thrust=Hammerhead,t0=0,wind=wind_1,initDebug=True,fin=FinSet(**SharkShotFins),rcs=ReactionControlSystem(**SharkShotRCS))
 
 # International Space Station
-ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,0,1), v=vec(7.67e3,0,0), I_0=vec(1e1,1e1,1e1), cg=vec(0,0,-30), cp=vec(0,0,0), cd=cd_atlas, A=50, cd_s=1, A_s=50, main_deploy_alt=0, chute_cd=0, chute_A=0, drogue_cd=0, drogue_A=0, dry_mass=1e1, fuel_mass=1, thrust=Stationkeeping, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**SharkShotFins), rcs=ReactionControlSystem(**SharkShotRCS))
+ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,0,1), v=vec(7.67e3,0,0), I_0=vec(1e4,1e4,1e4), cg=vec(0,0,-5), cp=vec(0,0,0), cd=cd_atlas, A=50, cd_s=1, A_s=50, main_deploy_alt=0, chute_cd=0, chute_A=0, drogue_cd=0, drogue_A=0, dry_mass=1e1, fuel_mass=1, thrust=Stationkeeping, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**SharkShotFins), rcs=ReactionControlSystem(**SharkShotRCS))
 
 
 
@@ -817,7 +817,7 @@ ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,
 # Defining vehicles and their properties
 booster = FreeRocket(**ISS)
 booster.rcs.setReference(vec(0,0,1),vec(0,1,0))
-booster.rcs.setPID(100,0,0,1)
+booster.rcs.setPID(0.005,0,0,1)
 booster.rcs.setProfile(1,1,np.pi/180)
 
 paused = False
