@@ -276,12 +276,14 @@ class ReactionControlSystem:
 
     # Retrieve the current total thrust vector exerted by RCS.
     def getThrust(self):
-        theta_err = -diff_angle(self.roll_setpoint,self.roll) * hat(cross(self.roll,self.roll_setpoint))
+        theta_err = diff_angle(self.roll_setpoint,self.roll) * hat(cross(self.roll,self.roll_setpoint))
+        print(f"error angle: {theta_err}")
         if theta_err.mag > self.min_err:
             # Desired angular velocity to reach the correct nose angle
             omega_d = 2*theta_err
             # Angular velocity error
             omega_err = omega_d - self.omega
+            print(f"omega_err: {omega_err}")
             # Angular velocity error integral 
             self.omega_acc.x = max(min(omega_err.x + self.omega_acc.x, self.izone), -self.izone)
             self.omega_acc.y = max(min(omega_err.y + self.omega_acc.y, self.izone),-self.izone)
@@ -291,10 +293,13 @@ class ReactionControlSystem:
             self.last_omega_err = omega_err
             # Angular acceleration from velocity PID 
             alpha = omega_err * self.kp + self.omega_acc * self.ki + d_omega_err * self.kd
+            print(f"alpha: {alpha}")
             # Transform alpha into local coordinates
             alpha_local = vec(alpha.dot(self.pitch),alpha.dot(self.yaw),alpha.dot(self.roll))
+            print(f"alpha_local: {alpha_local}")
             # Calculate required moment about each axis to achieve alpha_local
             moment = vec(alpha.x * self.I_O.x, alpha.y * self.I_O.y, alpha.z * self.I_O.z)
+            print(f"moment: {moment}")
             # Calculate thrust for pitch acceleration
             pitch_radius = (self.cg - self.rcg).z
             thrust_pitch = -moment.x / pitch_radius * self.yaw
@@ -302,15 +307,19 @@ class ReactionControlSystem:
                 thrust_pitch = self.thrust*2 * thrust_pitch.hat
             # Calculate thrust for yaw acceleration
             yaw_radius = (self.cg - self.rcg).z
+            print(f"yaw_radius: {yaw_radius}, pitch: {self.pitch}")
             thrust_yaw = moment.y / yaw_radius * self.pitch
             if thrust_yaw.mag > self.thrust*2:
-                thrust_yaw = self.thrust*2*thrust_pitch.hat
+                thrust_yaw = self.thrust*2*thrust_yaw.hat
+            print(f"thrust_yaw: {thrust_yaw}")
             # Calculate thrust for roll acceleration
             thrust_roll = moment.z / self.radius
             if abs(thrust_roll) > self.thrust*4:
                 thrust_roll = sign(thrust_roll) * self.thrust*4
+            print(f"thrust_roll: {thrust_roll}")
             # Blend yaw and pitch thrust vectors together
             thrust = thrust_pitch + thrust_yaw
+            print(f"thrust: {thrust}")
             return {'thrust':thrust, 'thrust_roll':thrust_roll}
         else:
             return {'thrust':vec(0,0,0),'thrust_roll':0}
@@ -462,12 +471,6 @@ class FreeRocket:
             self.position_alt = gcurve(graph=self.position_graph, color=color.magenta, label="alt") # ft, altitude
             self.position_total = gcurve(graph=self.position_graph, color=color.black, label="Downrange distance")  # ft, downrange distance
 
-        if FreeRocket.rotation_graph_enable:
-            self.rotation_graph = graph(title=f"Orientation of {self.name}", xtitle="seconds", ytitle="degrees", fast=FreeRocket.fast_graphing)
-            self.rotation_yaw = gcurve(graph=self.rotation_graph, color=color.red, label="Yaw")
-            self.rotation_pitch = gcurve(graph=self.rotation_graph, color=color.green, label="Pitch")
-            self.rotation_roll = gcurve(graph=self.rotation_graph, color=color.blue, label="Roll")
-
         if FreeRocket.rotation_rate_graph_enable:
             self.rotation_rate_graph = graph(title=f"Rotation rate of {self.name}", xtitle="seconds", ytitle="degrees/s", fast=FreeRocket.fast_graphing)
             self.rotation_rate_yaw = gcurve(graph=self.rotation_rate_graph, color=color.red, label="Yaw rate")
@@ -600,8 +603,6 @@ class FreeRocket:
         self.roll_axis = rotate(self.roll_axis,self.drot.mag*dt,self.drot) 
         self.pitch_axis = rotate(self.pitch_axis,self.drot.mag*dt,self.drot)
         self.yaw_axis = rotate(self.yaw_axis,self.drot.mag*dt,self.drot)
-        # update azimuth/elevation
-        self.rot = vec(atan2(self.roll_axis.z,self.roll_axis.y),atan2(self.roll_axis.z,self.roll_axis.x),0) 
 
         # End of movement during this iteration
 
@@ -632,8 +633,8 @@ class FreeRocket:
             if FreeRocket.top_profile_enable:
                 self.flight_top.plot(self.pos.x*39.4/12, self.pos.y*39.4/12)
             if FreeRocket.moment_graph_enable:
-                self.moment_yaw.plot(t, M_net.x*39.4/12/4.448)
-                self.moment_pitch.plot(t, M_net.y*39.4/12/4.448)
+                self.moment_yaw.plot(t, M_net.y*39.4/12/4.448)
+                self.moment_pitch.plot(t, M_net.x*39.4/12/4.448)
                 self.moment_roll.plot(t, M_net.z*39.4/12/4.448)
                 self.moment_total.plot(t, M_net.mag*39.4/12/4.448)
             if FreeRocket.velocity_graph_enable:
@@ -647,10 +648,6 @@ class FreeRocket:
                 self.position_z.plot(t, self.pos.z*39.4/12)
                 self.position_alt.plot(t, altitude(self.pos)*39.4/12)
                 self.position_total.plot(t, sqrt((self.pos.x*39.4/12)**2 + (self.pos.y*39.4/12)**2))
-            if FreeRocket.rotation_graph_enable:
-                self.rotation_yaw.plot(t, self.rot.x*180/np.pi)
-                self.rotation_pitch.plot(t, self.rot.y*180/np.pi)
-                self.rotation_roll.plot(t, self.rot.z*180/np.pi)
             if FreeRocket.acceleration_graph_enable:
                 self.acceleration_x.plot(t, f_net.x / self.mass * 39.4/12 / 32.174)
                 self.acceleration_y.plot(t, f_net.y / self.mass * 39.4/12 / 32.174)
@@ -672,8 +669,8 @@ class FreeRocket:
             if FreeRocket.fin_aoa_graph_enable:
                 self.fin.aoa_plot(t, self.rot, airflow, self.cg)
             if FreeRocket.rcs_graph_enable:
-                self.rcs_x.plot(t,f_rcs.dot(self.yaw_axis))
-                self.rcs_y.plot(t,f_rcs.dot(self.pitch_axis))
+                self.rcs_x.plot(t,f_rcs.dot(self.pitch_axis))
+                self.rcs_y.plot(t,f_rcs.dot(self.yaw_axis))
                 self.rcs_z.plot(t,f_rcs.dot(self.roll_axis))
 
         # Update flight report variables
@@ -811,7 +808,7 @@ SharkShotRCS = dict(fuel_mass=5, cg=vec(0,0,-50/39.4), ct=vec(0,0,-50/39.4), rcg
 SharkShot = dict(name="SharkShot", pos=vec(0,0,1), roll_axis=vec(0,0,1), yaw_axis=vec(0,1,0), v=vec(0,0,5),I_0=vec(5.63e6/2.2/39.37**2,5.63e6/2.2/39.37**2,5.6e4/2.2/39.37**2),cg=vec(0,0,-181.3),cp=vec(0,0,-240),cd=cd_atlas, A=(12/2/39.4)**2*np.pi,cd_s=1,A_s=2,main_deploy_alt=500,chute_cd=0.8,chute_A=(300/39.4/2)**2*np.pi,drogue_cd=0.8,drogue_A=0.5,dry_mass=288.6/2.204,fuel_mass=400/2.204,thrust=Hammerhead,t0=0,wind=wind_1,initDebug=True,fin=FinSet(**SharkShotFins),rcs=ReactionControlSystem(**SharkShotRCS))
 
 # International Space Station
-ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,0,1), v=vec(7.67e3,0,0), I_0=vec(1e9,1e9,1e9), cg=vec(0,0,0), cp=vec(0,0,0), cd=cd_atlas, A=50, cd_s=1, A_s=50, main_deploy_alt=0, chute_cd=0, chute_A=0, drogue_cd=0, drogue_A=0, dry_mass=1e10, fuel_mass=1, thrust=Stationkeeping, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**SharkShotFins), rcs=ReactionControlSystem(**SharkShotRCS))
+ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,0,1), v=vec(7.67e3,0,0), I_0=vec(1e1,1e1,1e1), cg=vec(0,0,-30), cp=vec(0,0,0), cd=cd_atlas, A=50, cd_s=1, A_s=50, main_deploy_alt=0, chute_cd=0, chute_A=0, drogue_cd=0, drogue_A=0, dry_mass=1e1, fuel_mass=1, thrust=Stationkeeping, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**SharkShotFins), rcs=ReactionControlSystem(**SharkShotRCS))
 
 
 
@@ -820,7 +817,7 @@ ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,
 # Defining vehicles and their properties
 booster = FreeRocket(**ISS)
 booster.rcs.setReference(vec(0,0,1),vec(0,1,0))
-booster.rcs.setPID(0,0,0,1)
+booster.rcs.setPID(100,0,0,1)
 booster.rcs.setProfile(1,1,np.pi/180)
 
 paused = False
@@ -859,7 +856,7 @@ while altitude(booster.pos) < 21:
         sleep(1)
 
 
-dtime = 1/4
+dtime = 1/200
 print(f"Rocket cleared launch rail at {booster.v.z * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
 i = 1
@@ -869,7 +866,7 @@ while not booster.main_chute:
     #booster.rcs.setReference(vec(0,sin(time*pi/60),cos(time*pi/60)),vec(0,0,0))
     time += dtime
     i += 1
-    if i % 100 == 0:
+    if i % 50 == 0:
         booster.graph_enable = True
     else:
         booster.graph_enable = False
