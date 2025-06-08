@@ -388,8 +388,8 @@ class FreeRocket:
         t = 0  # s, thrust time variable
         dt = 0.01  # s, thrust time step
         self.J = 0  # total impulse
-        while self.thrust(t) > 0:  # integration of thrust
-            self.J += self.thrust(t) * dt
+        while self.thrust(t, 101325) > 0:  # integration of thrust at sea level
+            self.J += self.thrust(t, 101325) * dt
             t += dt
         self.bt = t  # s, motor burn time
         self.t0 = t0  # s, ignition time
@@ -420,7 +420,7 @@ class FreeRocket:
         if initDebug:
             print(f"{self.name} initial momentum: {self.p}kgm/s")
             print(f"{self.name} position: {self.pos}m orientation: {self.roll_axis} moments of inertia (PYR): {self.I_0}kg-m^2")
-            print(f"{self.name} total impulse: {d2(self.J)}Ns")
+            print(f"{self.name} total impulse at sea level: {d2(self.J)}Ns")
 
         # Graph object declaration
 
@@ -561,7 +561,7 @@ class FreeRocket:
         # THRUST VECTOR
         f_thrust = vec(0, 0, 0)
         if self.t0 <= t <= self.t1:
-            f_thrust = self.thrust(t - self.t0) * self.roll_axis
+            f_thrust = self.thrust(t - self.t0, P(self.pos)) * self.roll_axis
 
         # REACTION CONTROL SYSTEM
         # This method doesnt update the RCS system so you can apply the updates to the guidance inputs at any desired frequency
@@ -578,7 +578,7 @@ class FreeRocket:
         f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs
 
         # TOTAL NET MOMENT
-        M_net = vec(0,0,0) # M_drag + M_rcs + M_rcs_roll
+        M_net = M_drag + M_rcs + M_rcs_roll
 
         self.p = self.p + f_net * dt  # incrementing linear momentum
         self.v = self.p / self.mass  # calculating velocity
@@ -733,40 +733,46 @@ class FreeRocket:
 I435_time_points = [0,0.15,0.3,0.45,0.6,0.75,0.9,1.05,1.2,1.35,1.5,1.65,1.8,1.95,2.1,2.25,2.4]
 I435_thrust_points = [409.4694,447.336,451.1619,450.9657,369.0522,93.0969,76.8123,69.7491,55.2303,36.5913,27.6642,21.4839,17.9523,13.8321,5.4936,2.7468,2.1582]
 
+# Rocket thrust = mass flow rate * exhaust velocity + (exhaust pressure - ambient pressure) * exit area
+
 # thrust interpolation for 38mm 68-16-16 AP-Al motor test fired 3/16/2023
-def I435(t):
+def I435(t, P):
     if t<=2.4:
-        return np.interp(t, I435_time_points, I435_thrust_points)
+        return np.interp(t, I435_time_points, I435_thrust_points) + (101325 - P) * (2**2/4*pi/39.37**2)
     else:
         return 0
 
 # thrust function approximation for I240 motor
-def I240(t):
-    return -77 * (t - 0.2) ** 2 + 300
+def I240(t, P):
+    return -77 * (t - 0.2) ** 2 + 300 + (101325 - P) * (2**2/4*pi/39.37**2)
 
 # thrust function for LR-101 pressure-fed kerolox engine
-def LR101(t):
+
+def LR101(t, P):
     if t < 8:
-        return 1000 * 4.448 # lbf * N/lbf
+        return 1000 * 4.448 + (101325 - P) * (2.85**2/4*pi/39.37**2) # lbf * N/lbf
     else:
         return 0
 
 # thrust function for PEAR sustainer engine (kerolox)
-def PEARSustainerEngine(t):
-    if t < 25:
-        return 800 * 4.448 # lbf * N/lbf
+def PEARSustainerEngine(t, P):
+    if t < 27.327:
+        thrust = np.polyval([1.5144e-04,  -1.4953e-02,   6.4565e-01,  -1.9142e+01,   7.9920e+02],t) 
+        Pc = np.polyval([1.5144e-05,  -1.4953e-03,   6.4565e-02,  -1.9142e+00,   7.9920e+01],t) 
+        Pe = Pc / 8
+        return thrust * 4.448 + (Pe*6894.76 - P) * (5.063**2/4*pi/39.37**2) # lbf * N/lbf
     else:
         return 0
 
 # thrust function for Sharkshot pressure fed LOX/Kerosene engine
-def Hammerhead(t):
+def Hammerhead(t, P):
     if t < 19.4:
         return 1
         #return 4131.6 * 4.448 # N, thrust
     else:
         return 0
 
-def Stationkeeping(t):
+def Stationkeeping(t, P):
     if t < 1:
         return 1
     else:
@@ -795,8 +801,10 @@ AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180
 # Theseus on LR-101
 TheseusFins = dict(num_fins=4, center=vec(0,0,-5), pos=vec(0,0,-5.2), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 
-
-Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=vec(0,0,1), yaw_axis=vec(0,1,0), v=vec(0,0,5), I_0=vec(1e-4,1e-7,1e-4), cg=vec(0,-29.3/39.4,0), cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins),rcs=ReactionControlSystem(**DummyRCS))
+launcher = vec(0,0,1)
+launcher = rotate(launcher, 2*pi/180, vec(1,0,0))
+launcher = rotate(launcher, 2*pi/180, vec(0,-1,0))
+Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(64.5,64.5,5), cg=vec(0,-29.3/39.4,0), cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins),rcs=ReactionControlSystem(**DummyRCS))
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 
@@ -818,7 +826,7 @@ booster.rcs.setPID(0,0,0,0)
 booster.rcs.setProfile(1,1,np.pi/180)
 
 # this is the space shot upper stage.
-Theseus.update(name="PEARSustainer",dry_mass=55.7/2.204,fuel_mass=100/2.204,thrust=PEARSustainerEngine,t0=8.001,initDebug=True)
+Theseus.update(name="PEARSustainer",dry_mass=64.245/2.204,fuel_mass=85/2.204,thrust=PEARSustainerEngine,t0=8.001,initDebug=True)
 sustainer = FreeRocket(**Theseus)
 sustainer.rcs.setReference(vec(0,0,1),vec(0,1,0))
 sustainer.rcs.setPID(0,0,0,0)
@@ -851,19 +859,16 @@ print("----BEGIN SIMULATION----")
 # While still on launch rail
 while altitude(booster.pos) < 21:
     booster.simulate(time, dtime)
-    booster.v.y = 0
-    booster.v.x = 0
-    booster.roll_axis = vec(0,0,1)
+    booster.roll_axis = launcher
     booster.L = vec(0,0,0)
     booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     sustainer.inherit(booster)
-    sustainer.simulate(time,dtime)
     time += dtime
     while paused:
         sleep(1)
 
 
-dtime = 1/200
+dtime = 1/2000
 print(f"Rocket cleared launch rail at {booster.v.z * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
 i = 1
@@ -872,7 +877,6 @@ while time < booster.t1:
     booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     #booster.rcs.setReference(vec(0,sin(time*pi/60),cos(time*pi/60)),vec(0,0,0))
     sustainer.inherit(booster)
-    sustainer.simulate(time,dtime)
     time += dtime
     i += 1
     if i % 50 == 0:
@@ -885,7 +889,7 @@ while time < booster.t1:
 sustainer.mass = sustainer.dry_mass + sustainer.fuel_mass
 
 i = 1
-while not sustainer.drogue:
+while altitude(booster.pos) > 0:
     sustainer.simulate(time,dtime)
     booster.simulate(time,dtime)
     time += dtime
@@ -894,6 +898,21 @@ while not sustainer.drogue:
         booster.graph_enable = sustainer.graph_enable = True
     else:
         booster.graph_enable = sustainer.graph_enable = False
+    while paused:
+        sleep(1)
+    # go back to coarse time step for coast phase
+    if time > sustainer.t1:
+        dtime=0.01
+
+i = 1
+while altitude(sustainer.pos) > 0:
+    sustainer.simulate(time,dtime)
+    time += dtime
+    i += 1
+    if i % 250 == 0:
+        sustainer.graph_enable = True
+    else:
+        sustainer.graph_enable = False
     while paused:
         sleep(1)
 
