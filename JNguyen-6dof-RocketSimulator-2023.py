@@ -277,13 +277,11 @@ class ReactionControlSystem:
     # Retrieve the current total thrust vector exerted by RCS.
     def getThrust(self):
         theta_err = diff_angle(self.roll_setpoint,self.roll) * hat(cross(self.roll,self.roll_setpoint))
-        print(f"error angle: {theta_err}")
         if theta_err.mag > self.min_err:
             # Desired angular velocity to reach the correct nose angle
             omega_d = theta_err
             # Position error
             omega_err = omega_d - self.omega
-            print(f"omega_err: {omega_err}")
             # Angular velocity error integral 
             self.omega_acc.x = max(min(omega_err.x + self.omega_acc.x, self.izone), -self.izone)
             self.omega_acc.y = max(min(omega_err.y + self.omega_acc.y, self.izone),-self.izone)
@@ -293,13 +291,10 @@ class ReactionControlSystem:
             self.last_omega_err = omega_err
             # Angular acceleration from velocity PID 
             alpha = omega_err * self.kp + self.omega_acc * self.ki + d_omega_err * self.kd
-            print(f"alpha: {alpha}")
             # Transform alpha into local coordinates
             alpha_local = vec(alpha.dot(self.pitch),alpha.dot(self.yaw),alpha.dot(self.roll))
-            print(f"alpha_local: {alpha_local}")
             # Calculate required moment about each axis to achieve alpha_local
             moment = vec(alpha.x * self.I_O.x, alpha.y * self.I_O.y, alpha.z * self.I_O.z)
-            print(f"moment: {moment}")
             # Calculate thrust for pitch acceleration
             pitch_radius = (self.ct - self.rcg).z
             thrust_pitch = -moment.x / pitch_radius * self.yaw
@@ -307,19 +302,15 @@ class ReactionControlSystem:
                 thrust_pitch = self.thrust*2 * thrust_pitch.hat
             # Calculate thrust for yaw acceleration
             yaw_radius = (self.ct - self.rcg).z
-            print(f"yaw_radius: {yaw_radius}, pitch: {self.pitch}")
             thrust_yaw = moment.y / yaw_radius * self.pitch
             if thrust_yaw.mag > self.thrust*2:
                 thrust_yaw = self.thrust*2*thrust_yaw.hat
-            print(f"thrust_yaw: {thrust_yaw}")
             # Calculate thrust for roll acceleration
             thrust_roll = moment.z / self.radius
             if abs(thrust_roll) > self.thrust*4:
                 thrust_roll = sign(thrust_roll) * self.thrust*4
-            print(f"thrust_roll: {thrust_roll}")
             # Blend yaw and pitch thrust vectors together
             thrust = thrust_pitch + thrust_yaw
-            print(f"thrust: {thrust}")
             return {'thrust':thrust, 'thrust_roll':thrust_roll}
         else:
             return {'thrust':vec(0,0,0),'thrust_roll':0}
@@ -341,9 +332,9 @@ class FreeRocket:
     top_profile_enable = False
     aoa_graph_enable = False  
     force_graph_enable = True
-    mass_graph_enable = False
+    mass_graph_enable = True
     fin_aoa_graph_enable = False
-    rcs_graph_enable = True
+    rcs_graph_enable = False
 
     fast_graphing = False
     graph_enable = True
@@ -587,7 +578,7 @@ class FreeRocket:
         f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs
 
         # TOTAL NET MOMENT
-        M_net = M_drag + M_rcs + M_rcs_roll
+        M_net = vec(0,0,0) # M_drag + M_rcs + M_rcs_roll
 
         self.p = self.p + f_net * dt  # incrementing linear momentum
         self.v = self.p / self.mass  # calculating velocity
@@ -730,13 +721,11 @@ class FreeRocket:
                 self.I_0.z * self.drot.z
             )
         self.pos = parent.pos
-        self.rot = parent.rot
-        self.global_roll = parent.global_roll
-        self.global_pitch = parent.global_pitch
-        self.global_yaw = parent.global_yaw
-        parent.mass -= self.mass
+        self.roll_axis = parent.roll_axis
+        self.yaw_axis = parent.yaw_axis
+        self.pitch_axis = parent.pitch_axis
 
-        # end of staging inheritance methodR46
+        # end of staging inheritance method
 
     # end of class def
 
@@ -757,8 +746,15 @@ def I240(t):
 
 # thrust function for LR-101 pressure-fed kerolox engine
 def LR101(t):
-    if t < 8.88:
-        return 830 * 4.448 # lbf * N/lbf
+    if t < 8:
+        return 1000 * 4.448 # lbf * N/lbf
+    else:
+        return 0
+
+# thrust function for PEAR sustainer engine (kerolox)
+def PEARSustainerEngine(t):
+    if t < 25:
+        return 800 * 4.448 # lbf * N/lbf
     else:
         return 0
 
@@ -786,6 +782,7 @@ cd_points = np.array([0.30000000000000004, 0.28303571428571433, 0.26964285714285
 def cd_atlas(M: float):
     return np.interp(M,cd_M_points,cd_points)
 
+DummyRCS = dict(fuel_mass=0,cg=vec(0,0,-1),ct=vec(0,0,-1),rcg=(0,0,-1),radius=1,thrust=1,throttle=False)
 
 AlphaPhoenixFins = dict(num_fins=4, center=vec(0,-0.152,0), pos=vec(0,-0.162,0), planform=0.005, stall_angle=10*pi/180, ac_span=0.05, cl_pass=cl)
 
@@ -798,8 +795,8 @@ AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180
 # Theseus on LR-101
 TheseusFins = dict(num_fins=4, center=vec(0,0,-5), pos=vec(0,0,-5.2), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 
-Theseus = dict(name="Theseus", pos=vec(0,1,0), yaw=0, pitch=90*pi/180, roll=0, v_0=5, ymi=0.0715*100, pmi=0.0715*100, rmi=0.0012*100, cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, cg=vec(0,-4.5+8/39.37,0), dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins))
 
+Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=vec(0,0,1), yaw_axis=vec(0,1,0), v=vec(0,0,5), I_0=vec(1e-4,1e-7,1e-4), cg=vec(0,-29.3/39.4,0), cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins),rcs=ReactionControlSystem(**DummyRCS))
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 
@@ -810,15 +807,23 @@ SharkShot = dict(name="SharkShot", pos=vec(0,0,1), roll_axis=vec(0,0,1), yaw_axi
 # International Space Station
 ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,0,1), v=vec(7.67e3,0,0), I_0=vec(1e4,1e4,1e4), cg=vec(0,0,-5), cp=vec(0,0,0), cd=cd_atlas, A=50, cd_s=1, A_s=50, main_deploy_alt=0, chute_cd=0, chute_A=0, drogue_cd=0, drogue_A=0, dry_mass=1e1, fuel_mass=1, thrust=Stationkeeping, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**SharkShotFins), rcs=ReactionControlSystem(**SharkShotRCS))
 
-
-
 # Beginning of actual program execution
 
 # Defining vehicles and their properties
-booster = FreeRocket(**ISS)
+# This is a slightly modified Theseus which is used as a booster for space shot upper stage.
+Theseus.update(name="PEARBooster",dry_mass=325.1/2.204,fuel_mass=40/2.204,initDebug=True)
+booster = FreeRocket(**Theseus)
 booster.rcs.setReference(vec(0,0,1),vec(0,1,0))
-booster.rcs.setPID(0.005,0,0,1)
+booster.rcs.setPID(0,0,0,0)
 booster.rcs.setProfile(1,1,np.pi/180)
+
+# this is the space shot upper stage.
+Theseus.update(name="PEARSustainer",dry_mass=55.7/2.204,fuel_mass=100/2.204,thrust=PEARSustainerEngine,t0=8.001,initDebug=True)
+sustainer = FreeRocket(**Theseus)
+sustainer.rcs.setReference(vec(0,0,1),vec(0,1,0))
+sustainer.rcs.setPID(0,0,0,0)
+sustainer.rcs.setProfile(1,1,np.pi/180)
+
 
 paused = False
 
@@ -851,6 +856,8 @@ while altitude(booster.pos) < 21:
     booster.roll_axis = vec(0,0,1)
     booster.L = vec(0,0,0)
     booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
+    sustainer.inherit(booster)
+    sustainer.simulate(time,dtime)
     time += dtime
     while paused:
         sleep(1)
@@ -860,10 +867,12 @@ dtime = 1/200
 print(f"Rocket cleared launch rail at {booster.v.z * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
 i = 1
-while not booster.main_chute:
+while time < booster.t1:
     booster.simulate(time, dtime)
     booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
     #booster.rcs.setReference(vec(0,sin(time*pi/60),cos(time*pi/60)),vec(0,0,0))
+    sustainer.inherit(booster)
+    sustainer.simulate(time,dtime)
     time += dtime
     i += 1
     if i % 50 == 0:
@@ -872,6 +881,23 @@ while not booster.main_chute:
         booster.graph_enable = False
     while paused:
         sleep(1)
+
+sustainer.mass = sustainer.dry_mass + sustainer.fuel_mass
+
+i = 1
+while not sustainer.drogue:
+    sustainer.simulate(time,dtime)
+    booster.simulate(time,dtime)
+    time += dtime
+    i += 1
+    if i % 50 == 0:
+        booster.graph_enable = sustainer.graph_enable = True
+    else:
+        booster.graph_enable = sustainer.graph_enable = False
+    while paused:
+        sleep(1)
+
 print("-----END SIMULATION-----\n")
 
 booster.flight_report()
+sustainer.flight_report()
