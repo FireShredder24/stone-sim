@@ -35,11 +35,11 @@ fu_gamma = 1.667; % Specific heat ratio of FUEL ullage gas
 
 % initial properties
 oxP0 = 264.7; % psia initial oxidizer tank pressure
-oxV0 = 0.868; % ft3 initial oxidizer ullage volume
-oxmdot0 = 2.621; % lbm/s initial oxidizer mass flow rate
+oxV0 = 1.278; % ft3 initial oxidizer ullage volume
+oxmdot0 = 2.389; % lbm/s initial oxidizer mass flow rate
 fuP0 = 264.700; % psia initial fuel tank pressure
-fuV0 = 0.661; % ft3 initial fuel ullage volume
-fumdot0 = 1.379; % lbm/s initial fuel mass flow rate
+fuV0 = 1.028; % ft3 initial fuel ullage volume
+fumdot0 = 1.327; % lbm/s initial fuel mass flow rate
 ofr0 = oxmdot0/fumdot0 % initial O/F ratio
 oxrho = 71; % lbm/ft3 oxidizer density
 furho = 49; % lbm/ft3 fuel density
@@ -54,11 +54,13 @@ fubeta = Pc0/fumdot0 % psia*s/lbm fuel chamber pressure constant
 fualpha = fumdot0/sqrt(fuP0-Pc0) % lbm/s/sqrt(psia) fuel injector constant
 
 % end conditions
-oxVf = 1.790; % ft3 final oxidizer ullage volume
-fuVf = 1.365; % ft3 final fuel ullage volume
+oxVf = 2.636; % ft3 final oxidizer ullage volume
+fuVf = 2.122; % ft3 final fuel ullage volume
 tmax = 60; % maximum runtime
 minofr = 1.7; % minimum o/f ratio
 maxofr = 2.1; % maximum o/f ratio
+
+enableplot = false
 
 dt = 0.003
 n_points = ceil(tmax * 1/dt)
@@ -134,13 +136,13 @@ while n < n_points && oxV < oxVf && fuV < fuVf && t < tmax && minofr < ofr < max
   end
   if oxP < Pc || fuP < Pc
     disp("Exit! WARNING: Flow reversal!")
-  endif
+  end
 
 end
 
 disp("Final time:");
 disp(t);
-
+if enableplot
 % Plot tank and chamber pressures over time
 delete(figure(1));
 figure(1);
@@ -188,28 +190,37 @@ plot(tnum(1:(n-1)),fTnum(1:(n-1)),"blue");
 title("Thrust vs time");
 ylabel("pounds");
 xlabel("seconds");
+end
 
 % Perform polynomial regression on thrust data
 Tfit = polyfit(tnum(1:n-1),fTnum(1:n-1),4);
 Tpred = polyval(Tfit,tnum(1:n-1));
 % Plot regression polynomial onto thrust graph
+if enableplot
 plot(tnum(1:n-1),Tpred,"green");
+end
 % Print polynomial coefficients to command window
 disp("Plotted regression predicted thrust in green!");
 disp("Thrust as function of time:");
 disp("Read as polynomial coefficients in decreasing order");
 disp("at^4 + bt^3 + ct^2 + dt + e");
-disp(Tfit);
+allOneString = sprintf('%g,' , Tfit);
+allOneString = allOneString(1:end-1);% strip final comma
+disp(allOneString)
 
 % Perform polynomial regression on chamber pressure data
 Pfit = polyfit(tnum(1:n-1),Pcnum(1:n-1),4);
 Ppred = polyval(Pfit,tnum(1:n-1));
 % Plot regression polynomial onto pressure graph
+if enableplot
 figure(1);
 plot(tnum(1:n-1),Ppred);
+end
 % Print polynomial coefficients to command window
 disp("Plotted regression chamber pressure in purple!");
 disp("Chamber pressure as a function of time:");
-disp(Pfit);
+allOneString = sprintf('%g,' , Pfit);
+allOneString = allOneString(1:end-1);% strip final comma
+disp(allOneString);
 
 

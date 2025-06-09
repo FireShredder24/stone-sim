@@ -756,11 +756,11 @@ def LR101(t, P):
 
 # thrust function for PEAR sustainer engine (kerolox)
 def PEARSustainerEngine(t, P):
-    if t < 27.327:
-        thrust = np.polyval([1.5144e-04,  -1.4953e-02,   6.4565e-01,  -1.9142e+01,   7.9920e+02],t) 
-        Pc = np.polyval([1.5144e-05,  -1.4953e-03,   6.4565e-02,  -1.9142e+00,   7.9920e+01],t) 
+    if t < 51.891:
+        thrust = np.polyval([2.22035e-05,-0.003543,0.247237,-11.8455,799.184],t) 
+        Pc = np.polyval([2.22035e-06,-0.0003543,0.0247237,-1.18455,79.9184],t) 
         Pe = Pc / 8
-        return thrust * 4.448 + (Pe*6894.76 - P) * (5.063**2/4*pi/39.37**2) # lbf * N/lbf
+        return thrust * 4.448 + (Pe*6894.76 - P) * (3.552**2/4*pi/39.37**2) # lbf * N/lbf
     else:
         return 0
 
@@ -826,7 +826,7 @@ booster.rcs.setPID(0,0,0,0)
 booster.rcs.setProfile(1,1,np.pi/180)
 
 # this is the space shot upper stage.
-Theseus.update(name="PEARSustainer",dry_mass=64.245/2.204,fuel_mass=85/2.204,thrust=PEARSustainerEngine,t0=8.001,initDebug=True)
+Theseus.update(name="PEARSustainer",dry_mass=73.677/2.204,fuel_mass=150/2.204,thrust=PEARSustainerEngine,initDebug=True)
 sustainer = FreeRocket(**Theseus)
 sustainer.rcs.setReference(vec(0,0,1),vec(0,1,0))
 sustainer.rcs.setPID(0,0,0,0)
@@ -853,70 +853,51 @@ def timestep():
 
 dtimebutton = button(bind=timestep,text="Change dt")
 
+apogee_set = [0,0,0,0,0,0,0,0,0,0]
 
-print(f"Time step: {dtime:.3f}")
-print("----BEGIN SIMULATION----")
-# While still on launch rail
-while altitude(booster.pos) < 21:
-    booster.simulate(time, dtime)
-    booster.roll_axis = launcher
-    booster.L = vec(0,0,0)
-    booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
-    sustainer.inherit(booster)
-    time += dtime
-    while paused:
-        sleep(1)
+i = 0
+while i <= 10:
+    time = 0
+    dtime = 1/50
+    wind_1 = WindProfile(**FAR_wind)
+    sustainer = FreeRocket(**Theseus)
+    sustainer.wind = wind_1
+    sustainer.graph_enable = False
+    print(f"Time step: {dtime:.3f}")
+    print("----BEGIN SIMULATION----")
+    # While still on launch rail
+    while altitude(sustainer.pos) < 21:
+        sustainer.simulate(time, dtime)
+        sustainer.roll_axis = launcher
+        sustainer.drot = vec(0,0,0)
+        sustainer.p = sustainer.p.mag * launcher.hat
+        time += dtime
+        while paused:
+            sleep(1)
 
+    dtime = 1/800
+    print(f"Rocket cleared launch rail at {sustainer.v.mag * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
 
-dtime = 1/2000
-print(f"Rocket cleared launch rail at {booster.v.z * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
+    while time < sustainer.t1:
+        sustainer.simulate(time, dtime)
+        time += dtime
+        while paused:
+            sleep(1)
 
-i = 1
-while time < booster.t1:
-    booster.simulate(time, dtime)
-    booster.rcs.setPose(booster.roll_axis,booster.yaw_axis,booster.pitch_axis,booster.drot)
-    #booster.rcs.setReference(vec(0,sin(time*pi/60),cos(time*pi/60)),vec(0,0,0))
-    sustainer.inherit(booster)
-    time += dtime
+    dtime = 0.05
+    print(f"Engine burnout at {sustainer.v.mag * 39.37 /12:.2f} ft/s at T+{time:.2f}s.  dt adjusted to {dtime:.3f}s")
+    while altitude(sustainer.pos) > 0:
+        sustainer.simulate(time,dtime)
+        time += dtime
+        while paused:
+            sleep(1)
+
+    apogee_set[i] = ceil(sustainer.z_max*39.37/12)
+    sustainer.flight_report()
+    print(f"Apogees: {apogee_set}")
     i += 1
-    if i % 50 == 0:
-        booster.graph_enable = True
-    else:
-        booster.graph_enable = False
-    while paused:
-        sleep(1)
 
-sustainer.mass = sustainer.dry_mass + sustainer.fuel_mass
-
-i = 1
-while altitude(booster.pos) > 0:
-    sustainer.simulate(time,dtime)
-    booster.simulate(time,dtime)
-    time += dtime
-    i += 1
-    if i % 50 == 0:
-        booster.graph_enable = sustainer.graph_enable = True
-    else:
-        booster.graph_enable = sustainer.graph_enable = False
-    while paused:
-        sleep(1)
-    # go back to coarse time step for coast phase
-    if time > sustainer.t1:
-        dtime=0.01
-
-i = 1
-while altitude(sustainer.pos) > 0:
-    sustainer.simulate(time,dtime)
-    time += dtime
-    i += 1
-    if i % 250 == 0:
-        sustainer.graph_enable = True
-    else:
-        sustainer.graph_enable = False
-    while paused:
-        sleep(1)
-
-print("-----END SIMULATION-----\n")
-
-booster.flight_report()
-sustainer.flight_report()
+print("-----END MONTE CARLO SIMULATION-----\n")
+print(f"Apogees: {apogee_set}")
+print(f"Mean apogee: {np.average(apogee_set)}")
+print(f"Stdev apogee: {np.std(apogee_set)}")
