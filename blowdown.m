@@ -35,16 +35,16 @@ fu_gamma = 1.667; % Specific heat ratio of FUEL ullage gas
 
 % initial properties
 oxP0 = 264.7; % psia initial oxidizer tank pressure
-oxV0 = 1.278; % ft3 initial oxidizer ullage volume
-oxmdot0 = 2.389; % lbm/s initial oxidizer mass flow rate
+oxV0 = 2.314; % ft3 initial oxidizer ullage volume
+oxmdot0 = 5.384; % lbm/s initial oxidizer mass flow rate
 fuP0 = 264.700; % psia initial fuel tank pressure
-fuV0 = 1.028; % ft3 initial fuel ullage volume
-fumdot0 = 1.327; % lbm/s initial fuel mass flow rate
+fuV0 = 9.636; % ft3 initial fuel ullage volume
+fumdot0 = 1.346; % lbm/s initial fuel mass flow rate
 ofr0 = oxmdot0/fumdot0 % initial O/F ratio
 oxrho = 71; % lbm/ft3 oxidizer density
-furho = 49; % lbm/ft3 fuel density
+furho = 4.430; % lbm/ft3 fuel density
 
-T0 = 800; % lbf, initial thrust
+T0 = 2000; % lbf, initial thrust
 Pc0 = 80; % psia initial chamber pressure
 
 % flow constants
@@ -54,11 +54,11 @@ fubeta = Pc0/fumdot0 % psia*s/lbm fuel chamber pressure constant
 fualpha = fumdot0/sqrt(fuP0-Pc0) % lbm/s/sqrt(psia) fuel injector constant
 
 % end conditions
-oxVf = 2.636; % ft3 final oxidizer ullage volume
-fuVf = 2.122; % ft3 final fuel ullage volume
+oxVf = 4.774; % ft3 final oxidizer ullage volume
+fuVf = 19.872; % ft3 final fuel ullage volume
 tmax = 60; % maximum runtime
-minofr = 1.7; % minimum o/f ratio
-maxofr = 2.1; % maximum o/f ratio
+minofr = ofr0*0.85; % minimum o/f ratio
+maxofr = ofr0*1.15; % maximum o/f ratio
 
 enableplot = false
 

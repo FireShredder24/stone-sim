@@ -756,11 +756,11 @@ def LR101(t, P):
 
 # thrust function for PEAR sustainer engine (kerolox)
 def PEARSustainerEngine(t, P):
-    if t < 51.891:
-        thrust = np.polyval([2.22035e-05,-0.003543,0.247237,-11.8455,799.184],t) 
-        Pc = np.polyval([2.22035e-06,-0.0003543,0.0247237,-1.18455,79.9184],t) 
+    if t < 41.754:
+        thrust = np.polyval([0.000127581,-0.0164375,0.92882,-36.2125,1998.08],t) 
+        Pc = np.polyval([5.10325e-06,-0.000657499,0.0371528,-1.4485,79.9233],t) 
         Pe = Pc / 8
-        return thrust * 4.448 + (Pe*6894.76 - P) * (3.552**2/4*pi/39.37**2) # lbf * N/lbf
+        return thrust * 4.448 + (Pe*6894.76 - P) * (5.362**2/4*pi/39.37**2) # lbf * N/lbf
     else:
         return 0
 
@@ -804,7 +804,7 @@ TheseusFins = dict(num_fins=4, center=vec(0,0,-5), pos=vec(0,0,-5.2), planform=0
 launcher = vec(0,0,1)
 launcher = rotate(launcher, 2*pi/180, vec(1,0,0))
 launcher = rotate(launcher, 2*pi/180, vec(0,-1,0))
-Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(64.5,64.5,5), cg=vec(0,-29.3/39.4,0), cp=vec(0,-4.5,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins),rcs=ReactionControlSystem(**DummyRCS))
+Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(2970,2970,10), cg=vec(0,-237/39.4,0), cp=vec(0,-250/39.4,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins),rcs=ReactionControlSystem(**DummyRCS))
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 
@@ -820,18 +820,8 @@ ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,
 # Defining vehicles and their properties
 # This is a slightly modified Theseus which is used as a booster for space shot upper stage.
 Theseus.update(name="PEARBooster",dry_mass=325.1/2.204,fuel_mass=40/2.204,initDebug=True)
-booster = FreeRocket(**Theseus)
-booster.rcs.setReference(vec(0,0,1),vec(0,1,0))
-booster.rcs.setPID(0,0,0,0)
-booster.rcs.setProfile(1,1,np.pi/180)
-
 # this is the space shot upper stage.
-Theseus.update(name="PEARSustainer",dry_mass=73.677/2.204,fuel_mass=150/2.204,thrust=PEARSustainerEngine,initDebug=True)
-sustainer = FreeRocket(**Theseus)
-sustainer.rcs.setReference(vec(0,0,1),vec(0,1,0))
-sustainer.rcs.setPID(0,0,0,0)
-sustainer.rcs.setProfile(1,1,np.pi/180)
-
+Theseus.update(name="PEARSustainer",I_0=vec(4410,4410,30),A=(10/2/39.4)**2*np.pi,cg=vec(0,0,-234.7/39.4),cp=vec(0,0,-250/39.4),dry_mass=234/2.204,fuel_mass=220/2.204,thrust=PEARSustainerEngine,initDebug=True)
 
 paused = False
 
@@ -856,13 +846,19 @@ dtimebutton = button(bind=timestep,text="Change dt")
 apogee_set = [0,0,0,0,0,0,0,0,0,0]
 
 i = 0
-while i <= 10:
+while i <= 9:
     time = 0
     dtime = 1/50
     wind_1 = WindProfile(**FAR_wind)
     sustainer = FreeRocket(**Theseus)
+    sustainer.rcs.setReference(vec(0,0,1),vec(0,1,0))
+    sustainer.rcs.setPID(0,0,0,0)
+    sustainer.rcs.setProfile(1,1,np.pi/180)
     sustainer.wind = wind_1
-    sustainer.graph_enable = False
+    if i == 0:
+        sustainer.graph_enable = True
+    else:
+        sustainer.graph_enable = False
     print(f"Time step: {dtime:.3f}")
     print("----BEGIN SIMULATION----")
     # While still on launch rail
@@ -877,10 +873,16 @@ while i <= 10:
 
     dtime = 1/800
     print(f"Rocket cleared launch rail at {sustainer.v.mag * 39.37 / 12:.2f} ft/s at T+{time:.2f}s.  Time step changed to {dtime:.3f}s")
+    n=1
 
     while time < sustainer.t1:
         sustainer.simulate(time, dtime)
         time += dtime
+        if i == 0 and n % 100 == 0:
+            sustainer.graph_enable=True
+        else:
+            sustainer.graph_enable=False
+        n+=1
         while paused:
             sleep(1)
 
@@ -889,6 +891,11 @@ while i <= 10:
     while altitude(sustainer.pos) > 0:
         sustainer.simulate(time,dtime)
         time += dtime
+        if i == 0 and n % 10 == 0:
+            sustainer.graph_enable = True
+        else:
+            sustainer.graph_enable = False
+        n+=1
         while paused:
             sleep(1)
 
