@@ -28,7 +28,7 @@ T_surf = 200 # Kelvin
 conduct_rt = 7.49e-6 # Kelvin meter^2 / Watt
 
 # convective thermal resistance of working fluid inside panel
-convect_rt = 0.0291 # Kelvin meter^2 / Watt
+convect_rt = 0.0321 # Kelvin meter^2 / Watt
 
 # MATERIAL PROPERTIES OF RADIATOR PANEL
 
@@ -43,8 +43,8 @@ cp_panel = 896 # Joule / kilogram Kelvin
 
 # DIMENSIONS OF RADIATOR PANEL
 
-width = 1 # meter
-length = 1 # meter
+width = 0.45 # meter
+length = 2.24 # meter
 thickness = 0.003 # meter
 
 # area density of panel
@@ -57,7 +57,7 @@ diameter = 0.002 # meter
 spacing = 0.004 # meter
 
 # number of tubes
-n_tubes = 250
+n_tubes = 112
 
 # MATERIAL PROPERTIES OF WORKING FLUID
 
@@ -67,7 +67,7 @@ viscosity = 0.00013 # kilogram / meter second (alternately Pascal second)
 
 cp_fluid = 4744 # Joule / kilogram Kelvin
 
-velocity = 1.83 # meter / second
+velocity = 4.08 # meter / second
 
 # SIMULATION OVERVIEW
 
@@ -114,12 +114,12 @@ velocity = 1.83 # meter / second
 # Note that time step dt also directly affects number of elements!
 # This simulation takes O(1/dt^2) time to run.
 t = 0 # seconds
-dt = 0.1 # seconds
-tmax = 1 # seconds
+dt = 0.005 # seconds
+tmax = 50 # seconds
 
 # number of elements
-# sized for 1 element representing length fluid flows in dt seconds
-n = ceil(length / velocity / dt)
+# sized for 1 element representing length fluid flows in 0.01 seconds
+n = ceil(length / velocity * 100)
 
 # sim tick counter
 m = 0
@@ -131,18 +131,18 @@ m_max = ceil(tmax/dt)
 len_ea = length/n # meter
 
 # element area
-area_fluid = len_ea * diameter * np.pi
-area_radiate = len_ea * spacing * 2
+area_fluid = len_ea * diameter * np.pi # meter^2, area of inside of tube
+area_radiate = len_ea * spacing * 2 # meter^2, area for radiation and conduction (both sides included)
 
 # Adjust the thermal resistances for the area of the element
-conductive_rt = conduct_rt / area_radiate
-convective_rt = convect_rt / area_fluid
+conductive_rt = conduct_rt / area_radiate # Kelvin / Watt
+convective_rt = convect_rt / area_fluid # Kelvin / Watt
 
 # heat capacity of the fluid in element
-cp_ea_fluid = cp_fluid * density * diameter**2 / 4 * np.pi * len_ea
+cp_ea_fluid = cp_fluid * density * diameter**2 / 4 * np.pi * len_ea # Joule / Kelvin
 
 # heat capacity of the solid panel in element
-cp_ea_panel = cp_panel * dens_panel * len_ea * spacing
+cp_ea_panel = cp_panel * dens_panel * len_ea * spacing # Joule / Kelvin
 
 # ELEMENT PROPERTY MATRIX DEFINITION
 
