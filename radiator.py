@@ -17,7 +17,7 @@ stefboltz = 5.67e-8 # Watt / meter^2 Kelvin^4
 T_inf = 0 # Kelvin
 
 # fluid inlet
-T_inlet = 310 # Kelvin
+T_inlet = 320 # Kelvin
 
 # initial surface temperature
 T_surf = 200 # Kelvin
@@ -25,10 +25,10 @@ T_surf = 200 # Kelvin
 # THERMAL RESISTANCES
 
 # conductive thermal resistance of the radiator panel
-conduct_rt = 1.8e-5 # Kelvin meter^2 / Watt
+conduct_rt = 7.49e-6 # Kelvin meter^2 / Watt
 
 # convective thermal resistance of working fluid inside panel
-convect_rt = 0.1826 # Kelvin meter^2 / Watt
+convect_rt = 0.0291 # Kelvin meter^2 / Watt
 
 # MATERIAL PROPERTIES OF RADIATOR PANEL
 
@@ -43,36 +43,38 @@ cp_panel = 896 # Joule / kilogram Kelvin
 
 # DIMENSIONS OF RADIATOR PANEL
 
-width = 1.29 # meter
-length = 3.87 # meter
-thickness = 0.00603 # meter
+width = 1 # meter
+length = 1 # meter
+thickness = 0.003 # meter
 
 # area density of panel
-dens_panel = 13.69 # kilogram / meter^2
+dens_panel = 5.98 # kilogram / meter^2
 
 # tube diameter
-diameter = 0.006 # meter
+diameter = 0.002 # meter
 
 # tube spacing
-spacing = 0.03 # meter
+spacing = 0.004 # meter
 
-# tube path length
-path_length = 170.77 # meter
+# number of tubes
+n_tubes = 250
 
 # MATERIAL PROPERTIES OF WORKING FLUID
 
-density = 999 # kilogram / meter^3
+density = 696 # kilogram / meter^3
 
-viscosity = 0.001 # kilogram / meter second (alternately Pascal second)
+viscosity = 0.00013 # kilogram / meter second (alternately Pascal second)
 
-cp_fluid = 4184 # Joule / kilogram Kelvin
+cp_fluid = 4744 # Joule / kilogram Kelvin
 
-velocity = 0.71 # meter / second
+velocity = 1.83 # meter / second
 
 # SIMULATION OVERVIEW
 
 # This program assumes a rectangular radiator panel
-# with coolant tubes running back and forth inside it.
+# with many coolant tubes running parallel in the 
+# same direction through it, assumed to be served
+# by inlet and outlet manifolds at either end.
 # The properties of this panel, detailed above, are
 # calculated in a spreadsheet also in this folder.
 
@@ -112,12 +114,12 @@ velocity = 0.71 # meter / second
 # Note that time step dt also directly affects number of elements!
 # This simulation takes O(1/dt^2) time to run.
 t = 0 # seconds
-dt = 0.3 # seconds
-tmax = 100 # seconds
+dt = 0.1 # seconds
+tmax = 1 # seconds
 
 # number of elements
 # sized for 1 element representing length fluid flows in dt seconds
-n = ceil(path_length / velocity / dt)
+n = ceil(length / velocity / dt)
 
 # sim tick counter
 m = 0
@@ -126,11 +128,16 @@ m_max = ceil(tmax/dt)
 # ELEMENT PROPERTIES
 
 # element length
-len_ea = path_length/n # meter
+len_ea = length/n # meter
 
 # element area
 area_fluid = len_ea * diameter * np.pi
-area_radiate = len_ea * spacing
+area_radiate = len_ea * spacing * 2
+
+# Adjust the thermal resistances for the area of the element
+conductive_rt = conduct_rt / area_radiate
+convective_rt = convect_rt / area_fluid
+
 # heat capacity of the fluid in element
 cp_ea_fluid = cp_fluid * density * diameter**2 / 4 * np.pi * len_ea
 
@@ -141,13 +148,11 @@ cp_ea_panel = cp_panel * dens_panel * len_ea * spacing
 
 # 0-n y z = Element position
 # x 0 z = Fluid temperature
-# x 1 z = Convective heat transfer
-# x 2 z = Surface temperature
-# x 3 z = Conductive heat transfer
-# x 4 z = Radiative heat transfer
+# x 1 z = Surface temperature
+# x 2 z = Radiative heat transfer
 # x y 0-m = Simulation tick
 
-shape = (n, 5, m_max)
+shape = (n, 3, m_max)
 
 matrix = np.zeros(shape)
 
@@ -156,92 +161,82 @@ while nn < n:
     matrix[nn,0,0] = T_surf
     matrix[nn,2,0] = T_surf
     nn += 1
-
 # SIMULATION LOOP
 while m < ceil(tmax/dt):
     nn = 0
     while nn < n:
+        # if at fluid inlet, clamp to fluid inlet temperature
         if nn == 0:
             fluid_T_inlet = T_inlet
             matrix[0,0,m] = T_inlet
+        # otherwise, take the temperature propagated from previous position
         else:
             fluid_T_inlet = matrix[nn,0,m]
 
-        surf_T_initial = matrix[nn,2,m]
+        # Take the current surface temperature (this is written to by the previous timestep)
+        surf_T_initial = matrix[nn,1,m]
 
+        # Thermal resistance of radiation, Kelvin / Watt
         radiative_rt = 1 / (stefboltz * emiss * area_radiate * (surf_T_initial**2 + T_inf**2) * (surf_T_initial + T_inf))
 
-        heat_transfer = 1/(radiative_rt + conduct_rt + convect_rt) * area_radiate * (surf_T_initial - T_inf) * dt
+        # Total heat transfer out of this element, Joule
+        heat_transfer = 1/(radiative_rt + conductive_rt + convective_rt) * area_radiate * (surf_T_initial - T_inf) * dt
 
+        # Fluid outlet temperature, Kelvin
         fluid_T_outlet = fluid_T_inlet - heat_transfer / cp_ea_fluid
 
-        matrix[nn,1,m] = heat_transfer / dt
+        # Heat transfer rate out of this element, Watt
+        matrix[nn,2,m] = heat_transfer / dt
 
+        # Propagate to next fluid element unless at outlet
         if nn+1 < n:
             matrix[nn+1,0,m] = fluid_T_outlet
-        
-        matrix[nn,3,m] = heat_transfer / dt
 
-        surf_T_final = fluid_T_inlet - (conduct_rt + convect_rt)* heat_transfer / dt
-        matrix[nn,2,m] = surf_T_final
-        
-        matrix[nn,4,m] = heat_transfer / dt
+        # Final surface temperature, Kelvin
+        # Temperature difference = Effective thermal resistance * Heat transfer rate
+        surf_T_final = fluid_T_inlet - (conductive_rt + convective_rt)* heat_transfer / dt
+        matrix[nn,1,m] = surf_T_final
 
-        delta = surf_T_final / surf_T_initial
+        # Propagate to next time step unless at final time
+        if m+1 < m_max:
+            matrix[nn,1,m+1] = surf_T_final
 
         nn += 1
-    if delta < 0.01:
-        print("Exited due to reaching steady state conditions")
-        break
     m += 1
 
 # this function displays a single snapshot in time of the radiator.
 # choose your property by proper array indexing as shown in the example below
 # matrix[0:n-1:1,1,m_max] grabs the surface temperature snapshot from the final time step
 def displayreshaped(mat, length, len_ea, width, figure,title):
-    # number of elements per straight length of tube
-    n_per_straight = ceil(length / len_ea)
-    # total length of array
-    final_slice_length = mat.shape[0]
-    # empty spaces to pad array with to enable reshaping into rectangle for display
-    padding_number = n_per_straight - final_slice_length % n_per_straight
-    # pad final array with values copied from the edge to avoid zeros messing up the colormap
-    padded = np.pad(mat,(0,padding_number),'edge')
-    # reshape final surface temperature slice into rectangle
-    final_grid = np.reshape(padded,[-1,n_per_straight])
-
-    # correct for zigzag tubing by flipping every other row around
-    max_col = final_grid.shape[0]
-    col = 1
-    while col < max_col:
-        final_grid[col,:] = np.flip(final_grid[col,:],0)
-        col += 2
+    parallel = mat
+    ng = 0
+    # duplicates single tube across full width to achieve to-scale display
+    while ng < n_tubes:
+        parallel = np.vstack([parallel,mat])
+        ng += 1
 
     # plot final surface temperature
     fig = plt.figure(figure)
-    plot = plt.imshow(final_grid,cmap='hot',interpolation='nearest')
+    plot = plt.imshow(parallel,cmap='hot',interpolation='nearest',aspect=spacing/len_ea)
     fig.add_artist(plot)
     plt.title(title)
     plt.colorbar()
 
-# convective heat transfer rate
-convection = matrix[0:n-1:1,1,m_max-1]
-
 # surface temperature
-surftemp = matrix[0:n-1:1,2,0]
+surftemp = matrix[0:n-1:1,1,m_max-1]
 
-# conductive heat transfer rate
-conduction = matrix[0:n-1:1,3,m_max-1]
-
-# fluid temperature 
-fluidtemp = matrix[0:n-1:1,0,m_max-1]
+# fluid temperature
+fluidtemp = matrix[0:n-1:1,0,m_max-1] # Kelvin
 
 # radiative heat transfer rate
-radiation = matrix[0:n-1:1,4,m_max-1]
+radiation = matrix[0:n-1:1,2,m_max-1]/area_radiate # Watt / meter^2
+print(surftemp.shape)
+print(f"Total heat transfer: {np.sum(radiation*area_radiate)*n_tubes:.2f} Watts")
+print(f"Total area: {length*width:.2f} meter^2")
+print(f"Total dry mass: {dens_panel*length*width:.2f} kg")
+print(f"Total coolant mass: {n_tubes*length*diameter**2/4*np.pi*density:.2f} kg")
 
-displayreshaped(convection,length,len_ea,width,1,"Convective heat transfer at final")
-displayreshaped(surftemp,length,len_ea,width,2,"Final surface temperature distribution")
-displayreshaped(fluidtemp,length,len_ea,width,3,"Final fluid temperature distribution")
-displayreshaped(radiation,length,len_ea,width,4,"Final radiative heat transfer")
-displayreshaped(conduction,length,len_ea,width,5,"Final conductive heat transfer")
+displayreshaped(surftemp,length,len_ea,width,1,"Final surface temperature (K)")
+displayreshaped(fluidtemp,length,len_ea,width,2,"Final fluid temperature (K)")
+displayreshaped(radiation,length,len_ea,width,3,"Final radiative heat transfer rate (Watt/meter^2)")
 plt.show()
