@@ -26,10 +26,14 @@ T_surf = 200 # Kelvin
 # THERMAL RESISTANCES
 
 # conductive thermal resistance of the radiator panel
-conduct_rt = 5.99e-6 # Kelvin meter^2 / Watt
+conduct_rt = 1.05e-5 # Kelvin meter^2 / Watt
 
 # convective thermal resistance of working fluid inside panel
-convect_rt = 0.0775 # Kelvin meter^2 / Watt
+convect_rt = 0.0613 # Kelvin meter^2 / Watt
+
+# PUMP HEAT
+
+pump_heat = 30.72 # Watt
 
 # MATERIAL PROPERTIES OF RADIATOR PANEL
 
@@ -48,24 +52,24 @@ k_panel = 167 # Watt / meter Kelvin
 
 # DIMENSIONS OF RADIATOR PANEL
 
-width = 0.58 # meter
-length = 1.73 # meter
-thickness = 0.0025 # meter
+width = 1 # meter
+length = 3 # meter
+thickness = 0.004 # meter
 
 # area density of panel
-dens_panel = 5.15 # kilogram / meter^2
+dens_panel = 7.60 # kilogram / meter^2
 
 # tube diameter
-diameter = 0.0015 # meter
+diameter = 0.003 # meter
 
 # tube spacing
-spacing = 0.005 # meter
+spacing = 0.006 # meter
 
 # number of tubes (unused by zigzag)
 n_tubes = 112
 
 # path length
-path_length = 335.15 # meter
+path_length = 503.15 # meter
 
 # MATERIAL PROPERTIES OF WORKING FLUID
 
@@ -77,7 +81,7 @@ viscosity = 0.00013 # kilogram / meter second (alternately Pascal second)
 
 cp_fluid = 4744 # Joule / kilogram Kelvin
 
-velocity = 1.46 # meter / second
+velocity = 1.89 # meter / second
 
 # SIMULATION OVERVIEW
 
@@ -124,8 +128,8 @@ velocity = 1.46 # meter / second
 # Note that time step dt also directly affects number of elements!
 # This simulation takes O(1/dt^2) time to run.
 t = 0 # seconds
-dt = 0.2 # seconds
-tmax = 250 # seconds
+dt = 0.3 # seconds
+tmax = path_length/velocity*2 # seconds
 
 # number of elements
 # sized for 1 element representing length fluid flows in dt seconds
@@ -218,14 +222,14 @@ while m < m_max:
             temp_change = downstream_heat_transfer / cp_ea_panel
             matrix[nn+1,1,m] = downstream_T - temp_change / 2
             surf_T_initial += temp_change / 2
-        if nn - n_straight >= 0:
-            left_T = matrix[nn-n_straight,1,m]
+        if nn - (2*n_straight-1) >= 0:
+            left_T = matrix[nn-(2*n_straight-1),1,m]
             left_heat_transfer = gth_trv_cond * (left_T - surf_T_initial) * dt
             temp_change = left_heat_transfer / cp_ea_panel
             matrix[nn-n_straight,1,m] = left_T - temp_change / 2
             surf_T_initial += temp_change / 2
-        if nn + n_straight <= n-1:
-            right_T = matrix[nn+n_straight,1,m]
+        if nn + (2*n_straight-1) <= n-1:
+            right_T = matrix[nn+(2*n_straight-1),1,m]
             right_heat_transfer = gth_trv_cond * (right_T - surf_T_initial) * dt
             temp_change = right_heat_transfer / cp_ea_panel
             matrix[nn+n_straight,1,m] = right_T - temp_change / 2
@@ -339,24 +343,36 @@ radiation = matrix[0:n-1:1,2,min(m,m_max-1)]/area_radiate # Watt / meter^2
 m_dot = diameter**2/4*np.pi * velocity * density
 
 # initial conditions report
-print("INITIAL CONDITIONS: -----------------")
+print("\nINITIAL CONDITIONS: -----------------")
 print(f"T_inlet = {T_inlet:.2f} Kelvin, T_inf = {T_inf:.2f} Kelvin")
 print(f"Length = {length:.2f} meters, width = {width:.2f} meters")
-print(f"Total area: {length*width:.2f} meter^2")
+area = length*width
+dry_mass = dens_panel * length * width
+coolant_mass = path_length*diameter**2/4*np.pi*density
+mass = dry_mass + coolant_mass
+print(f"Total area: {area:.2f} meter^2")
+print(f"Total dry mass: {dry_mass:.2f} kg")
+print(f"Total coolant mass: {coolant_mass:.2f} kg")
+print(f"Total mass: {mass:.2f} kg")
 print(f"Coolant is {coolant_name}")
 print(f"Volume flowrate = {m_dot / density:.6f} m^3/s, mass flowrate = {m_dot:.4f} kg/s") 
+print(f"Pump heat = {pump_heat} Watts")
 
 
-print(f"Total heat transfer: {np.sum(radiation*area_radiate):.2f} Watts")
-print(f"Total dry mass: {dens_panel*length*width:.2f} kg")
-print(f"Total coolant mass: {path_length*diameter**2/4*np.pi*density:.2f} kg")
+print(f"\nSIMULATION REPORT: -------------------")
+heat_total = np.sum(radiation*area_radiate)
+print(f"Total heat transfer: {heat_total:.2f} Watts")
+print(f"Net heat transfer: {heat_total - pump_heat:.2f} Watts")
+print(f"Heat transfer per unit area: {heat_total/area:.2f} Watts / meter^2")
+print(f"Heat transfer per unit mass: {heat_total/mass:.2f} Watts / kg")
 T_outlet = matrix[n-2,0,min(m,m_max-1)]
-print(f"Outlet temperature: {T_outlet:.2f} K")
+print(f"Outlet temperature: {T_outlet:.2f} Kelvin")
 # heat removal check using fluid at operating temperature difference
 q_max = m_dot * cp_fluid * (T_inlet - T_outlet)
 print(f"Heat transfer from fluid flow and delta_T: {q_max:.2f} Watts")
 
-displayreshaped(surftemp,length,len_ea,width,1,"Final surface temperature (K)")
-displayreshaped(fluidtemp,length,len_ea,width,2,"Final fluid temperature (K)")
+# Plot heatmaps using matplotlib
+displayreshaped(surftemp,length,len_ea,width,1,"Final surface temperature (Kelvin)")
+displayreshaped(fluidtemp,length,len_ea,width,2,"Final fluid temperature (Kelvin)")
 displayreshaped(radiation,length,len_ea,width,3,"Final radiative heat transfer rate (Watt/meter^2)")
 plt.show()
