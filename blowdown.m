@@ -20,7 +20,7 @@
 % can easily occur if the ullage gas was initially at a higher temperature
 % than the cryogenic propellant (say, liquid hydrogen) it pressurized.
 
-isothermal = false;
+isothermal = true;
 
 % Common specific heat ratios:
 % Helium - 1.667
@@ -34,18 +34,18 @@ ox_gamma = 1.667; % Specific heat ratio of OXIDIZER ullage gas
 fu_gamma = 1.667; % Specific heat ratio of FUEL ullage gas
 
 % initial properties
-oxP0 = 300; % psia initial oxidizer tank pressure
-oxV0 = 3.967; % ft3 initial oxidizer ullage volume
-oxmdot0 = 11.464; % lbm/s initial oxidizer mass flow rate
-fuP0 = 300; % psia initial fuel tank pressure
-fuV0 = 2.894; % ft3 initial fuel ullage volume
-fumdot0 = 6.034; % lbm/s initial fuel tank pressure
+oxP0 = 264.7; % psia initial oxidizer tank pressure
+oxV0 = 2.314; % ft3 initial oxidizer ullage volume
+oxmdot0 = 5.384; % lbm/s initial oxidizer mass flow rate
+fuP0 = 264.700; % psia initial fuel tank pressure
+fuV0 = 9.636; % ft3 initial fuel ullage volume
+fumdot0 = 1.346; % lbm/s initial fuel mass flow rate
 ofr0 = oxmdot0/fumdot0 % initial O/F ratio
-oxrho = 68; % lbm/ft3 oxidizer density
-furho = 49; % lbm/ft3 fuel density
+oxrho = 71; % lbm/ft3 oxidizer density
+furho = 4.430; % lbm/ft3 fuel density
 
-T0 = 4435.744; % lbf, initial thrust
-Pc0 = 120; % psia initial chamber pressure
+T0 = 2000; % lbf, initial thrust
+Pc0 = 80; % psia initial chamber pressure
 
 % flow constants
 oxbeta = Pc0/oxmdot0 % psia*s/lbm ox chamber pressure constant
@@ -54,14 +54,16 @@ fubeta = Pc0/fumdot0 % psia*s/lbm fuel chamber pressure constant
 fualpha = fumdot0/sqrt(fuP0-Pc0) % lbm/s/sqrt(psia) fuel injector constant
 
 % end conditions
-oxVf = 8.245; % ft3 final oxidizer ullage volume
-fuVf = 6.019; % ft3 final fuel ullage volume
+oxVf = 4.774; % ft3 final oxidizer ullage volume
+fuVf = 19.872; % ft3 final fuel ullage volume
 tmax = 60; % maximum runtime
-minofr = 1.7; % minimum o/f ratio
-maxofr = 2.1; % maximum o/f ratio
+minofr = ofr0*0.85; % minimum o/f ratio
+maxofr = ofr0*1.15; % maximum o/f ratio
+
+enableplot = false
 
 dt = 0.003
-n_points = tmax * 1/dt
+n_points = ceil(tmax * 1/dt)
 t = 0;
 n = 1;
 
@@ -134,13 +136,13 @@ while n < n_points && oxV < oxVf && fuV < fuVf && t < tmax && minofr < ofr < max
   end
   if oxP < Pc || fuP < Pc
     disp("Exit! WARNING: Flow reversal!")
-  endif
+  end
 
 end
 
 disp("Final time:");
 disp(t);
-
+if enableplot
 % Plot tank and chamber pressures over time
 delete(figure(1));
 figure(1);
@@ -188,17 +190,37 @@ plot(tnum(1:(n-1)),fTnum(1:(n-1)),"blue");
 title("Thrust vs time");
 ylabel("pounds");
 xlabel("seconds");
+end
 
 % Perform polynomial regression on thrust data
 Tfit = polyfit(tnum(1:n-1),fTnum(1:n-1),4);
 Tpred = polyval(Tfit,tnum(1:n-1));
 % Plot regression polynomial onto thrust graph
+if enableplot
 plot(tnum(1:n-1),Tpred,"green");
+end
 % Print polynomial coefficients to command window
 disp("Plotted regression predicted thrust in green!");
 disp("Thrust as function of time:");
 disp("Read as polynomial coefficients in decreasing order");
 disp("at^4 + bt^3 + ct^2 + dt + e");
-disp(Tfit);
+allOneString = sprintf('%g,' , Tfit);
+allOneString = allOneString(1:end-1);% strip final comma
+disp(allOneString)
+
+% Perform polynomial regression on chamber pressure data
+Pfit = polyfit(tnum(1:n-1),Pcnum(1:n-1),4);
+Ppred = polyval(Pfit,tnum(1:n-1));
+% Plot regression polynomial onto pressure graph
+if enableplot
+figure(1);
+plot(tnum(1:n-1),Ppred);
+end
+% Print polynomial coefficients to command window
+disp("Plotted regression chamber pressure in purple!");
+disp("Chamber pressure as a function of time:");
+allOneString = sprintf('%g,' , Pfit);
+allOneString = allOneString(1:end-1);% strip final comma
+disp(allOneString);
 
 
