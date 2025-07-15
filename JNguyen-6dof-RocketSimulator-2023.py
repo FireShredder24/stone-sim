@@ -533,6 +533,8 @@ class FreeRocket:
         airflow = self.v + self.wind.wind(self.pos)  # 3d linear vector of oncoming airstream (reversed)
         alpha = math.acos(heading.dot(airflow.hat))  # rad, angle of attack
         cd = self.cd(self.v.mag / c(self.pos))  # drag coefficient
+        if t < self.t1:
+            cd = cd * 0.75 # Accounting for change in drag coefficient due to jet plume from rocket exhaust
         A = self.A_alpha(alpha)  # m^2, reference area
         f_drag = airflow.mag ** 2 * rho(self.pos) * cd * A / 2 * -airflow.hat # N, body drag force
 
