@@ -353,7 +353,7 @@ class FreeRocket:
     # Z axis runs straight up, co-linear with the radius from the center of the Earth to the origin
 
     # constructor
-    def __init__(self, name: str, pos: vector, roll_axis: vector, yaw_axis: vector, v: vector, I_0: vector, cg: vector, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float, drogue_cd: float, drogue_A: float, dry_mass: float, fuel_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet, rcs: ReactionControlSystem):
+    def __init__(self, name: str, pos: vector, roll_axis: vector, yaw_axis: vector, v: vector, I_0: vector, cg: vector, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float, drogue_cd: float, drogue_A: float, dry_mass: float, fuel_mass: float, eject_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet, rcs: ReactionControlSystem):
         self.name = name
         # FUNDAMENTAL VECTORS
         self.pos = pos  # m, 3D cartesian position
@@ -380,7 +380,12 @@ class FreeRocket:
         self.cg = cg  # m, center of mass position vector (see coordinate system definition above)
         self.dry_mass = dry_mass  # kg
         self.fuel_mass = fuel_mass  # kg
-        self.mass = self.dry_mass + self.fuel_mass + rcs.fuel_mass # kg, total initial mass
+        self.mass = self.dry_mass + self.fuel_mass + rcs.fuel_mass + eject_mass # kg, total initial mass
+        # Mass ejected upon end of burn
+        # This accounts for extra liquid propellant, usually excess fuel, and ullage gas
+        self.eject_mass = eject_mass # kg
+        # Mass ejection state variable
+        self.ejected_fuel = False
 
         # PROPULSION PROPERTIES
 
@@ -410,6 +415,7 @@ class FreeRocket:
         self.rcs.setRCg(self.cg)
         self.rcs.setI(self.I_0)
         self.rcs.setPose(self.roll_axis,self.pitch_axis,self.yaw_axis,self.drot)
+
 
         # State variables for drogue and main parachute deployment, NOT deployment toggles.
         self.drogue = False
@@ -532,7 +538,7 @@ class FreeRocket:
         heading = self.roll_axis  # 3d linear unit vector of vehicle orientation
         airflow = self.v + self.wind.wind(self.pos)  # 3d linear vector of oncoming airstream (reversed)
         alpha = math.acos(heading.dot(airflow.hat))  # rad, angle of attack
-        cd = self.cd(self.v.mag / c(self.pos))  # drag coefficient
+        cd = self.cd(self.v.mag / c(self.pos))  # drag coefficient as function of Mach number
         if t < self.t1:
             cd = cd * 0.75 # Accounting for change in drag coefficient due to jet plume from rocket exhaust
         A = self.A_alpha(alpha)  # m^2, reference area
@@ -602,6 +608,11 @@ class FreeRocket:
         # Remove burned fuel from vehicle mass
         # Assumes fuel mass flow rate is proportional to thrust
         self.mass = self.mass - f_thrust.mag * dt / self.J * self.fuel_mass
+
+        # Eject extra fuel/ullage gas at end of burn
+        if t > self.t1 and not self.ejected_fuel:
+            self.ejected_fuel = True
+            self.mass = self.mass - self.eject_mass
 
         # Parachute deployment checks
 
@@ -751,8 +762,8 @@ def I240(t, P):
 # thrust function for LR-101 pressure-fed kerolox engine
 
 def LR101(t, P):
-    if t < 8:
-        return 1000 * 4.448 + (101325 - P) * (2.85**2/4*pi/39.37**2) # lbf * N/lbf
+    if t < 10.4:
+        return 830 * 4.448 + (101325 - P) * (2.85**2/4*pi/39.37**2) # lbf * N/lbf
     else:
         return 0
 
@@ -791,6 +802,10 @@ def cd_atlas(M: float):
     return np.interp(M,cd_M_points,cd_points)
 
 DummyRCS = dict(fuel_mass=0,cg=vec(0,0,-1),ct=vec(0,0,-1),rcg=(0,0,-1),radius=1,thrust=1,throttle=False)
+dummy_rcs = ReactionControlSystem(**DummyRCS)
+dummy_rcs.setReference(vec(0,0,1),vec(0,1,0))
+dummy_rcs.setPID(0,0,0,0)
+dummy_rcs.setProfile(1,1,np.pi/180)
 
 AlphaPhoenixFins = dict(num_fins=4, center=vec(0,-0.152,0), pos=vec(0,-0.162,0), planform=0.005, stall_angle=10*pi/180, ac_span=0.05, cl_pass=cl)
 
@@ -806,7 +821,7 @@ TheseusFins = dict(num_fins=4, center=vec(0,0,-5), pos=vec(0,0,-5.2), planform=0
 launcher = vec(0,0,1)
 launcher = rotate(launcher, 2*pi/180, vec(1,0,0))
 launcher = rotate(launcher, 2*pi/180, vec(0,-1,0))
-Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(2970,2970,10), cg=vec(0,-237/39.4,0), cp=vec(0,-250/39.4,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=40.5/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins),rcs=ReactionControlSystem(**DummyRCS))
+Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(2970,2970,10), cg=vec(0,-237/39.4,0), cp=vec(0,-250/39.4,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=43.4/2.204, eject_mass=6/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins), rcs=dummy_rcs)
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 
@@ -821,9 +836,9 @@ ISS = dict(name="ISS",pos=vec(0,0,4.13e5), roll_axis=vec(1,0,0), yaw_axis=vec(0,
 
 # Defining vehicles and their properties
 # This is a slightly modified Theseus which is used as a booster for space shot upper stage.
-Theseus.update(name="PEARBooster",dry_mass=325.1/2.204,fuel_mass=40/2.204,initDebug=True)
+# Theseus.update(name="PEARBooster",dry_mass=325.1/2.204,fuel_mass=40/2.204,initDebug=True)
 # this is the space shot upper stage.
-Theseus.update(name="PEARSustainer",I_0=vec(4410,4410,30),A=(10/2/39.4)**2*np.pi,cg=vec(0,0,-234.7/39.4),cp=vec(0,0,-250/39.4),dry_mass=234/2.204,fuel_mass=220/2.204,thrust=PEARSustainerEngine,initDebug=True)
+# Theseus.update(name="PEARSustainer",I_0=vec(4410,4410,30),A=(10/2/39.4)**2*np.pi,cg=vec(0,0,-234.7/39.4),cp=vec(0,0,-250/39.4),dry_mass=234/2.204,fuel_mass=220/2.204,thrust=PEARSustainerEngine,initDebug=True)
 
 paused = False
 
@@ -845,10 +860,31 @@ def timestep():
 
 dtimebutton = button(bind=timestep,text="Change dt")
 
+theseus = FreeRocket(**Theseus)
+
+
+while altitude(theseus.pos) > 0:
+    theseus.simulate(time,dtime)
+    if altitude(theseus.pos) < 21:
+        theseus.roll_axis = launcher.hat
+        theseus.drot = vec(0,0,0)
+        theseus.p = theseus.p.mag * launcher.hat
+    if time / dtime % 10 < 1:
+        theseus.graph_enable = True
+    else:
+        theseus.graph_enable = False
+    while paused:
+        sleep(1)
+
+    time += dtime
+
+theseus.flight_report()
+
 apogee_set = [0,0,0,0,0,0,0,0,0,0]
 
+# Change while condition to i <= 9 to use PEAR monte-carlo
 i = 0
-while i <= 9:
+while i <= -1:
     time = 0
     dtime = 1/50
     wind_1 = WindProfile(**FAR_wind)
