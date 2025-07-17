@@ -577,13 +577,21 @@ class FreeRocket:
         f_rcs = rcs_out['thrust']
         f_rcs_roll = rcs_out['thrust_roll']
 
+        # GROUND IMPACT FORCE & NORMAL FORCE
+        # This is sized to bring momentum relative to Earth's surface to zero in a single time step.
+        f_impact = vec(0,0,0)
+        f_normal = vec(0,0,0)
+        if altitude(self.pos) < 0:
+            f_impact = self.p.mag / dt * (self.pos - cg_E).hat
+            f_normal = -f_grav
+
         # Moment due to yaw & pitch thrusters
         M_rcs = cross(self.roll_axis*(self.rcs.ct - self.cg).mag, f_rcs)
         # Moment due to roll thrusters
         M_rcs_roll = self.rcs.radius * f_rcs_roll * self.roll_axis
 
         # TOTAL NET FORCE
-        f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs
+        f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs + f_impact + f_normal
 
         # TOTAL NET MOMENT
         M_net = M_drag + M_rcs + M_rcs_roll
