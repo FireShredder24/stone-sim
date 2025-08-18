@@ -353,7 +353,7 @@ class FreeRocket:
     # Z axis runs straight up, co-linear with the radius from the center of the Earth to the origin
 
     # constructor
-    def __init__(self, name: str, pos: vector, roll_axis: vector, yaw_axis: vector, v: vector, I_0: vector, cg: vector, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float, drogue_cd: float, drogue_A: float, dry_mass: float, fuel_mass: float, eject_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet, rcs: ReactionControlSystem):
+    def __init__(self, name: str, pos: vector, roll_axis: vector, yaw_axis: vector, v: vector, I_0: vector, cg: vector, cp: vector, cd, A: float, cd_s: float, A_s: float, main_deploy_alt: float, chute_cd: float, chute_A: float, drogue_cd: float, drogue_A: float, chute_attachment: vector, dry_mass: float, fuel_mass: float, eject_mass: float, thrust, t0: float, wind: WindProfile, initDebug: bool, fin: FinSet, rcs: ReactionControlSystem):
         self.name = name
         # FUNDAMENTAL VECTORS
         self.pos = pos  # m, 3D cartesian position
@@ -374,6 +374,7 @@ class FreeRocket:
         self.chute_A = chute_A  # m^2, parachute reference area
         self.drogue_cd = drogue_cd  # drogue chute cd
         self.drogue_A = drogue_A  # m^2, drogue chute ref. area
+        self.chute_attachment = chute_attachment # vector, position of parachute shock cord attachment
         self.wind = wind  # Wind profile
         self.fin = fin # Fin set
         # MASS PROPERTIES
@@ -549,19 +550,29 @@ class FreeRocket:
         # FIN LIFT
         # M_lift = self.fin.total_lift_vec(self.rot, airflow, self.cg, self.pos.z).cross(self.fin.center - self.cg)
 
+	# PARACHUTE ATTACHMENT POSITION
+	# For calculating parachute moments
+	# Chute attachment point relative position 
+        chute_rel = self.chute_attachment - self.cg
+        chute_global = chute_rel.z * self.roll_axis.hat + chute_rel.y * self.yaw_axis.hat + chute_rel.x * self.pitch_axis.hat
+
         # DROGUE PARACHUTE DRAG
         if self.drogue:
             f_drogue = airflow.mag ** 2 * rho(self.pos) * self.drogue_cd * self.drogue_A / 2 * -airflow.hat
+            M_drogue = f_drogue.cross(chute_global)
         else:
             f_drogue = vec(0, 0, 0)
+            M_drogue = vec(0, 0, 0)
 
         # MAIN PARACHUTE DRAG
         if self.main_chute:
             opening_time = 3
             ramp = min(t - self.main_time,opening_time) / opening_time # Ramps parachute opening area over time
             f_chute = airflow.mag ** 2 * rho(self.pos) * self.chute_cd * self.chute_A * ramp / 2 * -airflow.hat
+            M_chute = f_chute.cross(chute_global)
         else:
             f_chute = vec(0, 0, 0)
+            M_chute = vec(0, 0, 0)
 
         # GRAVITY FORCE
         f_grav = g(self.pos, self.mass)
@@ -594,7 +605,7 @@ class FreeRocket:
         f_net = f_grav + f_thrust + f_drag + f_chute + f_drogue + f_rcs + f_impact + f_normal
 
         # TOTAL NET MOMENT
-        M_net = M_drag + M_rcs + M_rcs_roll
+        M_net = M_drag + M_rcs + M_rcs_roll + M_drogue + M_chute
 
         self.p = self.p + f_net * dt  # incrementing linear momentum
         self.v = self.p / self.mass  # calculating velocity
@@ -779,7 +790,7 @@ def LR101(t, P):
 def PEARSustainerEngine(t, P):
     if t < 41.754:
         thrust = np.polyval([0.000127581,-0.0164375,0.92882,-36.2125,1998.08],t) 
-        Pc = np.polyval([5.10325e-06,-0.000657499,0.0371528,-1.4485,79.9233],t) 
+        Pc = np.polyval([5.10325e-06,-0.000657499,0.0371528,-1.4485,79.9233],t)
         Pe = Pc / 8
         return thrust * 4.448 + (Pe*6894.76 - P) * (5.362**2/4*pi/39.37**2) # lbf * N/lbf
     else:
@@ -827,9 +838,9 @@ AlphaPhoenix = dict(name="Alpha Phoenix", pos=vec(0,1,0), yaw=0, pitch=90*pi/180
 TheseusFins = dict(num_fins=4, center=vec(0,0,-5), pos=vec(0,0,-5.2), planform=0.0258, stall_angle=10*pi/180, ac_span=0.165, cl_pass=cl)
 
 launcher = vec(0,0,1)
-launcher = rotate(launcher, 2*pi/180, vec(1,0,0))
-launcher = rotate(launcher, 2*pi/180, vec(0,-1,0))
-Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(2970,2970,10), cg=vec(0,-237/39.4,0), cp=vec(0,-250/39.4,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, dry_mass=(160)/2.204, fuel_mass=43.4/2.204, eject_mass=6/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins), rcs=dummy_rcs)
+#launcher = rotate(launcher, 2*pi/180, vec(1,0,0))
+#launcher = rotate(launcher, 2*pi/180, vec(0,-1,0))
+Theseus = dict(name="Theseus", pos=vec(0,1,0), roll_axis=launcher, yaw_axis=rotate(launcher,pi/2,vec(1,0,0)), v=vec(0,0,5), I_0=vec(2970,2970,10), cg=vec(0,-237/39.4,0), cp=vec(0,-250/39.4,0), cd=cd_atlas, A=(8/2/39.4)**2*np.pi, cd_s=1, A_s=0.5, main_deploy_alt=350, chute_cd=0.8, chute_A=(120/39.4/2)**2*np.pi, drogue_cd=0.8, drogue_A=(60/39.4/2)**2*np.pi*2, chute_attachment=vec(0,0,-200/39.4), dry_mass=(160)/2.204, fuel_mass=43.4/2.204, eject_mass=6/2.204, thrust=LR101, t0=0, wind=wind_1, initDebug=False, fin=FinSet(**TheseusFins), rcs=dummy_rcs)
 # SharkShot on Hammerhead
 SharkShotFins = dict(num_fins=4, center=vec(0,-163/39.4,0), pos=vec(0, 0, -163/39.4), planform=0.0258, stall_angle=10*pi/180, ac_span=0.25, cl_pass=cl)
 
